@@ -1,0 +1,8 @@
+{
+  "name": "Controle de Produção",
+  "description": "Terminal de monitoração, controle de movimentação e produtividade logística da Porto Brasil Cerâmica, com lançamento de atividades (separação/armazenamento), controle de paradas e ranking de polivalência.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
