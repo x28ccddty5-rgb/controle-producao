@@ -113,15 +113,32 @@ export async function dbDeleteActivity(id: string): Promise<boolean> {
 // Stoppage API
 export async function dbFetchStoppages(): Promise<Stoppage[] | null> {
   if (!supabase) return null;
+
   try {
     const { data, error } = await supabase
       .from('stoppages')
       .select('*');
+
     if (error) {
       console.error('Error fetching stoppages:', error);
       return null;
     }
-    return data as Stoppage[];
+   return (data || []).map((row: any) => ({
+    id: row.id,
+    date: row.date,
+    operator: row.operator,
+    stoppageCode: row.stoppage_code,
+    stoppageName: row.stoppage_name,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    duration: row.duration,
+    durationMinutes: row.duration_minutes,
+    status: row.status,
+    notes: row.notes,
+    resolutionNotes: row.resolution_notes,
+    creator: row.creator,
+    createdAt: row.created_at
+})) as Stoppage[];
   } catch (err) {
     console.error('Supabase stoppages query failed:', err);
     return null;
@@ -130,10 +147,26 @@ export async function dbFetchStoppages(): Promise<Stoppage[] | null> {
 
 export async function dbSaveStoppage(stoppage: Stoppage): Promise<boolean> {
   if (!supabase) return false;
+
   try {
     const { error } = await supabase
       .from('stoppages')
-      .upsert(stoppage);
+      .upsert({
+      id: stoppage.id,
+      date: stoppage.date,
+      operator: stoppage.operator,
+      stoppage_code: stoppage.stoppageCode,
+      stoppage_name: stoppage.stoppageName,
+      start_time: stoppage.startTime,
+      end_time: stoppage.endTime,
+      duration: stoppage.duration,
+      duration_minutes: stoppage.durationMinutes,
+      status: stoppage.status,
+      notes: stoppage.notes,
+      resolution_notes: stoppage.resolutionNotes,
+      creator: stoppage.creator,
+      created_at: stoppage.createdAt
+    });
     if (error) {
       console.error('Error saving stoppage:', error);
       return false;
