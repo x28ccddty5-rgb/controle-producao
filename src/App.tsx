@@ -46,10 +46,10 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_USERS: CustomUser[] = [
-  { username: 'producao', name: 'Sara', password: '123', role: 'producao' },
-  { username: 'lideranca', name: 'Jonas', password: '456', role: 'supervisor' },
-  { username: 'adm', name: 'Matheus', password: '789', role: 'supervisor' },
-  { username: 'visualizar', name: 'Visualizador', password: '000', role: 'visualizador' }
+  { username: 'producao', name: 'Sara', password: '1234', role: 'producao' },
+  { username: 'lideranca', name: 'Jonas', password: 'ADM2026', role: 'lideranca' },
+  { username: 'adm', name: 'Matheus', password: 'math2308', role: 'supervisor' },
+  { username: 'visualizar', name: 'Visualizador', password: '0', role: 'visualizador' }
 ];
 
 function parseTimeToHours(timeStr: string): number {
