@@ -480,7 +480,7 @@ export default function App() {
     }
     const operatorKey = newActData.operator.toUpperCase().trim().replace(/\s+/g, '-');
     const prefix = `${formattedDateKey}_${operatorKey}`;
-    const newId = prefix;
+    const newId = `${prefix}_${Date.now()}`;
 
     let durStr = isRetro ? (newActData.duration || '01:00') : '00:00';
     let durHours = parseTimeToHours(durStr);
@@ -666,7 +666,7 @@ export default function App() {
     }
     const stopOperatorKey = newStopData.operator.toUpperCase().trim().replace(/\s+/g, '-');
     const stopPrefix = `${stopFormattedDateKey}_${stopOperatorKey}`;
-    const newId = stopPrefix;
+    const newId = `${stopPrefix}_${Date.now()}`;
 
     let durStr = isRetro ? (newStopData.duration || '00:15') : '00:00';
     let durMinutes = parseTimeToMinutes(durStr);
