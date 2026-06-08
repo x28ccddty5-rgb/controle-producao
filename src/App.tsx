@@ -516,9 +516,9 @@ export default function App() {
     const newLog = createLog('ATIVIDADE_INICIO', description, newActivity.operator, newId);
 
     persistData(
-      [newActivity, ...activities.filter(a => a.id !== newId)],
-      stoppages,
-      [newLog, ...logs]
+    [newActivity, ...activities],
+    stoppages,
+    [newLog, ...logs]
     );
 
     if (isSupabaseConfigured()) {
