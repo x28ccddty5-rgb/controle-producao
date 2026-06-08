@@ -33,15 +33,39 @@ export async function dbFetchActivities(): Promise<Activity[] | null> {
 
 export async function dbSaveActivity(activity: Activity): Promise<boolean> {
   if (!supabase) return false;
+
   try {
     const { error } = await supabase
       .from('activities')
-      .upsert(activity);
+      .upsert({
+        id: activity.id,
+        date: activity.date,
+        operator: activity.operator,
+        activity_code: activity.activityCode,
+        activity_name: activity.activityName,
+        local: activity.local,
+        list_id: activity.listId,
+        start_time: activity.startTime,
+        end_time: activity.endTime,
+        duration: activity.duration,
+        duration_hours: activity.durationHours,
+        pallet_jack_id: activity.palletJackId,
+        forklift_id: activity.forkliftId,
+        produced_quantity: activity.producedQuantity,
+        items_quantity: activity.itemsQuantity,
+        status: activity.status,
+        notes: activity.notes,
+        creator: activity.creator,
+        created_at: activity.createdAt
+      });
+
     if (error) {
       console.error('Error saving activity:', error);
       return false;
     }
+
     return true;
+
   } catch (err) {
     console.error('Supabase activity upsert failed:', err);
     return false;
