@@ -24,7 +24,27 @@ export async function dbFetchActivities(): Promise<Activity[] | null> {
       console.error('Error fetching activities:', error);
       return null;
     }
-    return data as Activity[];
+    return (data || []).map((row: any) => ({
+    id: row.id,
+    date: row.date,
+    operator: row.operator,
+    activityCode: row.activity_code,
+    activityName: row.activity_name,
+    local: row.local,
+    listId: row.list_id,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    duration: row.duration,
+    durationHours: row.duration_hours,
+    palletJackId: row.pallet_jack_id || '',
+    forkliftId: row.forklift_id || '',
+    producedQuantity: row.produced_quantity || 0,
+    itemsQuantity: row.items_quantity || 0,
+    status: row.status,
+    notes: row.notes,
+    creator: row.creator,
+    createdAt: row.created_at
+})) as Activity[];
   } catch (err) {
     console.error('Supabase activities query failed:', err);
     return null;
