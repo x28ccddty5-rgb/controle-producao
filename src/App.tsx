@@ -49,7 +49,7 @@ const DEFAULT_USERS: CustomUser[] = [
   { username: 'producao', name: 'Sara', password: '1234', role: 'producao' },
   { username: 'lideranca', name: 'Jonas', password: 'ADM2026', role: 'supervisor' },
   { username: 'adm', name: 'Matheus', password: 'math2308', role: 'supervisor' },
-  { username: 'visualizar', name: 'Visualizador', password: '0', role: 'visualizador' }
+  { username: 'visualizador', name: 'Visualizador', password: '2026', role: 'visualizador' }
 ];
 
 function parseTimeToHours(timeStr: string): number {
