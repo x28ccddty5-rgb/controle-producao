@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
 import { CustomUser } from '../types';
-import { 
-  Users, 
-  Layers, 
-  PowerOff, 
-  Lock, 
-  Plus, 
-  Trash2, 
-  Save, 
-  CheckCircle2, 
+import {
+  Users,
+  Layers,
+  PowerOff,
+  Lock,
+  Plus,
+  Trash2,
+  Save,
+  CheckCircle2,
   AlertCircle,
   Database,
   ArrowRight,
   ShieldCheck,
-  Eye
+  Eye,
+  Pencil
 } from 'lucide-react';
 //import { motion } from 'motion/react';
 
@@ -48,12 +49,22 @@ export default function AdminPanel({
   const [newStoppageName, setNewStoppageName] = useState('');
 
   // User input states
-  const [newUserName, setNewUserName] = useState('');
-  const [newUserUsername, setNewUserUsername] = useState('');
-  const [newUserPassword, setNewUserPassword] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'producao' | 'supervisor' | 'visualizador'>('producao');
+const [newUserName, setNewUserName] = useState('');
+const [newUserUsername, setNewUserUsername] = useState('');
+const [newUserPassword, setNewUserPassword] = useState('');
+const [newUserRole, setNewUserRole] = useState<'producao' | 'supervisor' | 'visualizador'>('producao');
 
-  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+const [editingUsername, setEditingUsername] = useState<string | null>(null);
+
+const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+const resetUserForm = () => {
+  setNewUserName('');
+  setNewUserUsername('');
+  setNewUserPassword('');
+  setNewUserRole('producao');
+  setEditingUsername(null);
+};
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -160,6 +171,7 @@ export default function AdminPanel({
   // --- 4. Manage Users ---
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
+    
     const name = newUserName.trim();
     const username = newUserUsername.trim().toLowerCase();
     const password = newUserPassword.trim();
@@ -189,26 +201,40 @@ export default function AdminPanel({
     };
 
     const updated = [...usersList, newUser];
-    onUpdateUsersList(updated);
-    setNewUserName('');
-    setNewUserUsername('');
-    setNewUserPassword('');
-    showNotification(`Usuário "${name}" cadastrado!`);
-  };
+      onUpdateUsersList(updated);
+      
+      resetUserForm();
+      
+      showNotification(`Usuário "${name}" cadastrado!`);
 
   const handleDeleteUser = (username: string) => {
-    const isSpecial = ['producao', 'lideranca', 'adm', 'visualizar'].includes(username.toLowerCase());
-    if (isSpecial) {
-      showNotification('Os usuários predefinidos (Produção, Jonas, Matheus, Visualizador) não podem ser excluídos.', 'error');
-      return;
-    }
+  const isProtected = [
+    'producao',
+    'lideranca',
+    'adm',
+    'visualizador'
+  ].includes(username.toLowerCase());
 
-    if (confirm(`Excluir o usuário de acesso "${username}"?`)) {
-      const updated = usersList.filter(u => u.username !== username);
-      onUpdateUsersList(updated);
-      showNotification(`Usuário "${username}" excluído.`);
-    }
-  };
+  if (isProtected) {
+    showNotification(
+      'Os usuários padrão do sistema não podem ser excluídos.',
+      'error'
+    );
+    return;
+  }
+
+  if (confirm(`Excluir o usuário de acesso "${username}"?`)) {
+    const updated = usersList.filter(
+      u => u.username !== username
+    );
+
+    onUpdateUsersList(updated);
+
+    showNotification(
+      `Usuário "${username}" excluído.`
+    );
+  }
+};
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm font-sans" id="admin-management-container">
@@ -555,41 +581,69 @@ export default function AdminPanel({
             <div className="md:col-span-7 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs flex flex-col justify-between">
               <div>
                 <div className="bg-slate-50 border-b border-slate-100 px-5 py-3 flex justify-between items-center">
-                  <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">Perfis de Logon Ativos</span>
+                  <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">Usuários do Sistema</span>
                   <span className="text-[10px] font-mono font-bold text-slate-655 bg-slate-150 px-2 py-0.5 rounded-full">{usersList.length} credenciais</span>
                 </div>
                 
                 <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto custom-scrollbar">
                   {usersList.map((u) => {
-                    const isProtected = ['producao', 'lideranca', 'adm', 'visualizar'].includes(u.username.toLowerCase());
+                    const isProtected = ['producao', 'lideranca', 'adm', 'visualizador'].includes(u.username.toLowerCase());
                     return (
                       <div key={u.username} className="px-5 py-3 flex justify-between items-center text-xs hover:bg-slate-50/50 transition">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center space-x-2 select-none">
-                            <span className="font-bold text-slate-700">{u.name}</span>
-                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase ${
-                              u.role === 'supervisor' ? 'bg-blue-50 text-blue-700' :
-                              u.role === 'visualizador' ? 'bg-amber-50 text-amber-705' : 'bg-slate-100 text-slate-650'
-                            }`}>
-                              {u.role === 'supervisor' ? 'ADM/LIDER' :
-                               u.role === 'visualizador' ? 'VISUALIZADOR' : 'OPERAÇÃO'}
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-700">
+                              {u.name}
+                            </span>
+                          
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${
+                                u.role === 'supervisor'
+                                  ? 'bg-blue-50 text-blue-700'
+                                  : u.role === 'visualizador'
+                                  ? 'bg-amber-50 text-amber-700'
+                                  : 'bg-slate-100 text-slate-650'
+                              }`}
+                            >
+                              {u.role === 'supervisor'
+                                ? 'SUPERVISOR'
+                                : u.role === 'visualizador'
+                                ? 'VISUALIZADOR'
+                                : 'OPERAÇÃO'}
                             </span>
                           </div>
-                          <div className="flex items-center space-x-3 font-mono text-[10px] text-slate-450">
-                            <span>User: <strong className="text-slate-600">{u.username}</strong></span>
-                            <span>Senha: <strong className="text-slate-600">{u.password}</strong></span>
+                          
+                          <div className="text-[11px] text-slate-500">
+                            Usuário: {u.username}
                           </div>
                         </div>
 
-                        {!isProtected && (
-                          <button
-                            onClick={() => handleDeleteUser(u.username)}
-                            className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer"
-                            title="Remover credenciais de acesso"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingUsername(u.username);
+                            
+                                  setNewUserName(u.name);
+                                  setNewUserUsername(u.username);
+                                  setNewUserPassword(u.password);
+                                  setNewUserRole(u.role);
+                                }}
+                                className="text-slate-400 hover:text-blue-500 p-1 rounded transition cursor-pointer"
+                                title="Editar usuário"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                            
+                              {!isProtected && (
+                                <button
+                                  onClick={() => handleDeleteUser(u.username)}
+                                  className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer"
+                                  title="Excluir usuário"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                       </div>
                     );
                   })}
