@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Stoppage } from '../types';
 import { 
   ShieldAlert,
@@ -8,9 +8,6 @@ import {
   Info, 
   Calendar,
   CheckCircle2, 
-  Search,
-  HardHat,
-  Trash2
 } from 'lucide-react';
 //import { motion, AnimatePresence } from 'motion/react';
 
@@ -55,7 +52,6 @@ export default function StoppageManagement({
   const stoppagesToUse = stoppagesList || STOPPAGES_LIST;
 
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [operatorSearch, setOperatorSearch] = useState('');
 
   // 1. Core Stoppage Form Inputs
   const [stoppageDate, setStoppageDate] = useState(() => {
@@ -88,16 +84,6 @@ export default function StoppageManagement({
 
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState('');
-
-  const pastStoppages = stoppages.filter(s => s.status === 'RESOLVIDA');
-
-  // Filter completed stoppages locally on operador search query
-  const filteredPastStoppages = useMemo(() => {
-    if (!operatorSearch.trim()) return pastStoppages;
-    return pastStoppages.filter(stop => 
-      stop.operator.toLowerCase().includes(operatorSearch.toLowerCase())
-    );
-  }, [pastStoppages, operatorSearch]);
 
   const handleCalculateDuration = (start: string, end: string) => {
     try {
@@ -361,103 +347,7 @@ export default function StoppageManagement({
           </div>
         )}
       </>
-
-      {/* 4. Resolved stoppages tracker table */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm font-sans" id="resolved-stoppages-container">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div>
-            <h3 className="font-bold text-slate-800 text-base">Ocorrência de Paradas Lançadas ({filteredPastStoppages.length})</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Histórico completo de intervalos e tempos ociosos lançados</p>
-          </div>
-          <div className="relative w-full md:w-72 shrink-0 select-none">
-            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Filtrar por nome do colaborador..."
-              value={operatorSearch}
-              onChange={(e) => setOperatorSearch(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-700 outline-hidden transition"
-            />
-          </div>
-        </div>
-
-        {filteredPastStoppages.length === 0 ? (
-          <div className="py-12 border border-dashed border-slate-200/65 rounded-xl text-center text-slate-400 text-sm">
-            Nenhum registro de parada encontrado para esta busca.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse" id="resolved-stoppages-table font-medium">
-              <thead>
-                <tr className="border-b border-slate-150 text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none bg-slate-50/50">
-                  <th className="py-3 px-4">Parada (Nº)</th>
-                  <th className="py-3 px-4">Motivo Lançado</th>
-                  <th className="py-3 px-4">Colaborador</th>
-                  <th className="py-3 px-4 text-center">Data</th>
-                  <th className="py-3 px-4 text-center">Início</th>
-                  <th className="py-3 px-4 text-center">Término</th>
-                  <th className="py-3 px-4 text-center">Duração</th>
-                  <th className="py-3 px-4">Ação / Notas</th>
-                  <th className="py-3 px-4">Lançador</th>
-                  {isAdmin && <th className="py-3 px-4 text-center w-16">Ação</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredPastStoppages.slice(0, 40).map((stop) => {
-                  return (
-                    <tr key={stop.id} className="hover:bg-slate-50/45 font-medium" id={`resolved-stoppage-row-${stop.id}`}>
-                      <td className="py-3 px-4 font-mono select-none">
-                        <span className="bg-slate-100 font-bold px-2 py-0.5 rounded text-slate-600 text-[11px] font-mono">
-                          {stop.stoppageCode || 13}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-bold text-slate-800">{stop.stoppageName}</td>
-                      <td className="py-3 px-4 text-slate-900 font-bold flex items-center gap-1.5">
-                        <span className="p-1 px-1.5 rounded bg-slate-100 text-[10px] font-bold text-slate-500 shrink-0 uppercase">
-                          <HardHat className="w-3 h-3 text-slate-400" />
-                        </span>
-                        <span>{stop.operator}</span>
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono text-slate-500 whitespace-nowrap">{stop.date}</td>
-                      <td className="py-3 px-4 text-center font-mono text-slate-500">
-                        {formatTimeLabel(stop.startTime)}
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono text-slate-500">
-                        {stop.endTime ? formatTimeLabel(stop.endTime) : '-'}
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono font-bold text-slate-900 whitespace-nowrap bg-slate-50/50 rounded-sm">
-                        {handleCalculateDuration(stop.startTime, stop.endTime || '')}
-                      </td>
-                      <td className="py-3 px-4 font-sans text-slate-500 italic max-w-[250px] truncate" title={stop.notes}>
-                        <div className="flex flex-col">
-                          <span>{stop.notes || '-'}</span>
-                          {stop.resolutionNotes && <span className="text-[10px] text-emerald-600 font-bold mt-1">Solução: {stop.resolutionNotes}</span>}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 font-semibold">{stop.creator || 'Sara'}</td>
-                      {isAdmin && (
-                        <td className="py-2 px-4 text-center">
-                          <button
-                            onClick={() => {
-                              if (window.confirm('Deseja realmente excluir este lançamento de parada de forma irrevogável?')) {
-                                onDeleteStoppage?.(stop.id);
-                              }
-                            }}
-                            className="p-1.5 text-red-500 hover:bg-rose-50 rounded-lg hover:text-red-700 transition cursor-pointer inline-flex items-center justify-center"
-                            title="Excluir Parada"
-                          >
-                            <Trash2 className="h-4.5 w-4.5" />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      
     </div>
   );
 }
