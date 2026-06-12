@@ -240,8 +240,6 @@ if (editingUsername) {
 
 };
 
-const handleDeleteUser = (username: string) => {
-
   const handleDeleteUser = (username: string) => {
   const isProtected = [
     'producao',
