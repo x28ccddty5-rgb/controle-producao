@@ -1054,40 +1054,27 @@ export default function App() {
             {/* Global Launch Parameters Block (Configured Once) */}
             <div className="mt-8 p-4 bg-slate-800/80 border border-slate-700/80 rounded-xl space-y-4 shadow-inner">
               <div className="flex items-center justify-between">
-                <span className="text-blue-400 text-[10px] uppercase font-bold tracking-wider block">Responsável & Data</span>
+                <span className="text-blue-400 text-[10px] uppercase font-bold tracking-wider block">Informações da Sessão</span>
                 <span className="inline-block bg-blue-500/10 text-blue-300 text-[9px] px-1.5 py-0.5 rounded font-mono font-bold tracking-wide">GLOBAL</span>
               </div>
               
               <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest">Lançado por</label>
-                <select
-                  value={globalCreator}
-                  onChange={(e) => {
-                    handleSelectUser(e.target.value);
-                  }}
-                  disabled={true}
-                  id="select-global-manager"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-400 text-xs outline-hidden cursor-not-allowed opacity-80"
-                  title="O responsável pelo lançamento é fixado pela sua conta logada atual."
-                >
-                  {usersList.map(u => (
-                    <option key={u.username} value={u.name}>{u.name}</option>
-                  ))}
-                </select>
+                <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+                  Usuário Logado
+                </label>
+              
+                <div className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-semibold">
+                  {globalCreator}
+                </div>
               </div>
 
               <div className="space-y-1">
                 <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest">Data</label>
-                <input
-                  type="date"
-                  value={globalLaunchDate}
-                  onChange={(e) => {
-                    setGlobalLaunchDate(e.target.value);
-                    localStorage.setItem('porto_global_launch_date', e.target.value);
-                  }}
-                  id="input-global-date"
-                  className="w-full bg-slate-900 border border-slate-700 hover:border-slate-600 rounded-lg px-3 py-2 text-white text-xs outline-hidden focus:border-blue-500 font-mono"
-                />
+                <div className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-mono">
+                  {globalLaunchDate
+                    ? new Date(globalLaunchDate + 'T00:00:00').toLocaleDateString('pt-BR')
+                    : '--/--/----'}
+                </div>
               </div>
             </div>
 
