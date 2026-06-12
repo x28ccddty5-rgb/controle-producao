@@ -188,25 +188,55 @@ const resetUserForm = () => {
       showNotification('Senha precisa ter 3 ou mais caracteres.', 'error');
       return;
     }
-    if (usersList.some(u => u.username.toLowerCase() === username)) {
-      showNotification(`O usuário de acesso "${username}" já está cadastrado.`, 'error');
+    if (
+      usersList.some(
+        u =>
+          u.username.toLowerCase() === username &&
+          u.username !== editingUsername
+      )
+    ) {
+      showNotification(
+        `O usuário de acesso "${username}" já está cadastrado.`,
+        'error'
+      );
       return;
     }
 
     const newUser: CustomUser = {
-      username,
-      name,
-      password,
-      role: newUserRole
-    };
+  username,
+  name,
+  password,
+  role: newUserRole
+};
 
-    const updated = [...usersList, newUser];
-    onUpdateUsersList(updated);
-    
-    resetUserForm();
-    
-    showNotification(`Usuário "${name}" cadastrado!`);
-    };
+if (editingUsername) {
+
+  const updated = usersList.map(user =>
+    user.username === editingUsername
+      ? newUser
+      : user
+  );
+
+  onUpdateUsersList(updated);
+
+  resetUserForm();
+
+  showNotification(
+    `Usuário "${name}" atualizado com sucesso!`
+  );
+
+} else {
+
+  const updated = [...usersList, newUser];
+
+  onUpdateUsersList(updated);
+
+  resetUserForm();
+
+  showNotification(
+    `Usuário "${name}" cadastrado!`
+  );
+}
 
   const handleDeleteUser = (username: string) => {
   const isProtected = [
@@ -517,7 +547,11 @@ const resetUserForm = () => {
             {/* Form */}
             <form onSubmit={handleAddUser} className="md:col-span-5 bg-slate-50 border border-slate-150 p-5 rounded-2xl flex flex-col justify-between space-y-3">
               <div className="space-y-3.5 text-xs">
-                <p className="text-[10px] tracking-wide text-slate-450 uppercase font-bold select-none border-b border-slate-200 pb-1.5 mb-2">Novo Perfil de Acesso</p>
+                <p className="text-[10px] tracking-wide text-slate-450 uppercase font-bold select-none border-b border-slate-200 pb-1.5 mb-2">
+                  {editingUsername
+                    ? `Editando: ${editingUsername}`
+                    : 'Novo Perfil de Acesso'}
+                </p>
                 
                 <div className="space-y-1.5">
                   <label className="block font-bold text-slate-500 uppercase tracking-wide">Nome por Extenso</label>
@@ -569,13 +603,32 @@ const resetUserForm = () => {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wide cursor-pointer flex items-center justify-center gap-2 shadow-xs transition pt-2.5"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Salvar Usuário</span>
-              </button>
+              <div className="flex gap-2">
+
+                <button
+                  type="submit"
+                  className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wide cursor-pointer flex items-center justify-center gap-2 shadow-xs transition"
+                >
+                  <Plus className="w-4 h-4" />
+              
+                  <span>
+                    {editingUsername
+                      ? 'Atualizar Usuário'
+                      : 'Salvar Usuário'}
+                  </span>
+                </button>
+              
+                {editingUsername && (
+                  <button
+                    type="button"
+                    onClick={resetUserForm}
+                    className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wide cursor-pointer transition"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              
+              </div>
             </form>
 
             {/* List */}
