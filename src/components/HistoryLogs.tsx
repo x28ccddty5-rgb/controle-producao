@@ -314,7 +314,7 @@ export default function HistoryLogs({
               <div className="overflow-x-auto overflow-y-auto max-h-[650px]">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider select-none bg-slate-50">
+                    <tr className="sticky top-0 z-10 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider select-none bg-slate-50">
                       <th className="py-3 px-4 min-w-[130px]">ID</th>
                       <th className="py-3 px-4 text-center">Data</th>
                       <th className="py-3 px-4">Colaborador</th>
@@ -392,7 +392,7 @@ export default function HistoryLogs({
               <div className="overflow-x-auto overflow-y-auto max-h-[650px]">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider select-none bg-slate-50">
+                    <tr className="sticky top-0 z-10 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider select-none bg-slate-50">
                       <th className="py-3 px-4 min-w-[130px]">ID</th>
                       <th className="py-3 px-4 text-center">Data</th>
                       <th className="py-3 px-4">Colaborador</th>
