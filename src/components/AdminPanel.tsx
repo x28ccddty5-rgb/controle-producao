@@ -236,7 +236,7 @@ if (editingUsername) {
   showNotification(
     `Usuário "${name}" cadastrado!`
   );
-}
+};
 
   const handleDeleteUser = (username: string) => {
   const isProtected = [
