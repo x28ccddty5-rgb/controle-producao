@@ -201,11 +201,12 @@ const resetUserForm = () => {
     };
 
     const updated = [...usersList, newUser];
-      onUpdateUsersList(updated);
-      
-      resetUserForm();
-      
-      showNotification(`Usuário "${name}" cadastrado!`);
+    onUpdateUsersList(updated);
+    
+    resetUserForm();
+    
+    showNotification(`Usuário "${name}" cadastrado!`);
+    };
 
   const handleDeleteUser = (username: string) => {
   const isProtected = [
@@ -620,6 +621,7 @@ const resetUserForm = () => {
 
                         <div className="flex items-center gap-2">
                               <button
+                                type="button"
                                 onClick={() => {
                                   setEditingUsername(u.username);
                             
