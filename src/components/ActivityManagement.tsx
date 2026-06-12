@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Activity, ActivityStatus } from '../types';
-import { CheckCircle2, ChevronDown, ChevronUp, FilePlus, AlertCircle, Calendar, Clock, BarChart, Search, Tag, HardHat, Trash2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, FilePlus, AlertCircle, Calendar, Clock, Tag } from 'lucide-react';
 //import { motion, AnimatePresence } from 'motion/react';
 
 interface ActivityManagementProps {
@@ -45,7 +45,6 @@ export default function ActivityManagement({
   const activitiesToUse = activitiesList || ACTIVITIES_LIST;
 
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [operatorSearch, setOperatorSearch] = useState('');
 
   // 1. Core activity details pre-fill
   const [prodDate, setProdDate] = useState(() => {
@@ -79,16 +78,6 @@ export default function ActivityManagement({
   const [itemsQuantity, setItemsQuantity] = useState<number>(0);
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState('');
-
-  const pastActivities = activities.filter(a => a.status === 'CONCLUIDO');
-
-  // Filter completed activities locally by collaborator search input
-  const filteredPastActivities = useMemo(() => {
-    if (!operatorSearch.trim()) return pastActivities;
-    return pastActivities.filter(act => 
-      act.operator.toLowerCase().includes(operatorSearch.toLowerCase())
-    );
-  }, [pastActivities, operatorSearch]);
 
   const handleCalculateDuration = (start: string, end: string) => {
     try {
@@ -442,96 +431,6 @@ export default function ActivityManagement({
           </div>
         )}
       </>
-
-      {/* 4. Past Completed Activities with Name Search bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm mr-1" id="completed-activities-container">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div>
-            <h3 className="font-bold text-slate-800 text-base">Últimas Movimentações Concluídas ({filteredPastActivities.length})</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Histórico de lotes consolidados neste terminal</p>
-          </div>
-          <div className="relative w-full md:w-72 shrink-0 select-none">
-            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Filtrar por nome do operador..."
-              value={operatorSearch}
-              onChange={(e) => setOperatorSearch(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-700 outline-hidden transition"
-            />
-          </div>
-        </div>
-        
-        {filteredPastActivities.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 text-sm border border-dashed border-slate-200/60 rounded-xl">
-            <BarChart className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-            <span>Nenhuma atividade consolidada encontrada para esta busca.</span>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left font-sans text-xs border-collapse font-medium" id="completed-activities-table">
-              <thead>
-                <tr className="border-b border-slate-150 text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none bg-slate-50/50">
-                  <th className="py-3 px-4">Data</th>
-                  <th className="py-3 px-4">Colaborador</th>
-                  <th className="py-3 px-4">Atividade</th>
-                  <th className="py-3 px-4 text-center">Local</th>
-                  <th className="py-3 px-4 text-center">Lista ID</th>
-                  <th className="py-3 px-3 text-center">Início/Fim</th>
-                  <th className="py-3 px-3 text-center">Duração</th>
-                  <th className="py-3 px-4 text-right">Peças</th>
-                  <th className="py-3 px-4 text-right">SKUs/Itens</th>
-                  <th className="py-3 px-4">Lançador</th>
-                  {isAdmin && <th className="py-3 px-4 text-center w-16">Ação</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredPastActivities.slice(0, 40).map((act) => (
-                  <tr key={act.id} className="hover:bg-slate-50/45" id={`completed-activity-row-${act.id}`}>
-                    <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">{act.date}</td>
-                    <td className="py-3 px-4 text-slate-900 font-bold flex items-center gap-1.5">
-                      <span className="p-1 px-1.5 rounded bg-slate-100 text-[10px] font-bold text-slate-500 shrink-0 uppercase">
-                        <HardHat className="w-3 h-3 text-slate-400" />
-                      </span>
-                      <span>{act.operator}</span>
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-slate-700">
-                      <span className="px-2 py-0.5 rounded-md bg-slate-150 text-slate-600 border border-slate-200/80 mr-2 text-[10px]">
-                        {act.activityCode}
-                      </span>
-                      {act.activityName}
-                    </td>
-                    <td className="py-3 px-4 text-center font-mono">{act.local}</td>
-                    <td className="py-3 px-4 text-center font-mono font-bold text-slate-600">{act.listId || 'N/A'}</td>
-                    <td className="py-3 px-3 text-center font-mono text-slate-500">{act.startTime} - {act.endTime || 'N/A'}</td>
-                    <td className="py-3 px-3 text-center font-mono font-bold text-slate-700 whitespace-nowrap">
-                      {act.duration}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono text-slate-800 font-bold">{act.producedQuantity.toLocaleString('pt-BR')}</td>
-                    <td className="py-3 px-4 text-right font-mono text-blue-600 font-bold">{act.itemsQuantity}</td>
-                    <td className="py-3 px-4 text-slate-500 font-semibold">{act.creator || 'Sara'}</td>
-                    {isAdmin && (
-                      <td className="py-2 px-4 text-center">
-                        <button
-                          onClick={() => {
-                            if (window.confirm('Deseja realmente excluir este lançamento de atividade de forma irrevogável?')) {
-                              onDeleteActivity?.(act.id);
-                            }
-                          }}
-                          className="p-1.5 text-red-500 hover:bg-rose-50 rounded-lg hover:text-red-700 transition cursor-pointer inline-flex items-center justify-center"
-                          title="Excluir Lançamento"
-                        >
-                          <Trash2 className="h-4.5 w-4.5" />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
 
     </div>
   );
