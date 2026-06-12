@@ -311,17 +311,28 @@ export default function ActivityManagement({
                   />
                 </div>
 
-                <div className="space-y-1.5 md:col-span-1">
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Nº Lista (Separação)</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: 21971..."
-                    value={listId}
-                    onChange={(e) => setListId(e.target.value)}
-                    id="input-activity-list"
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl px-4 py-2.5 text-slate-700 text-sm transition font-mono outline-hidden"
-                  />
-                </div>
+               {activityCode === 1 && (
+                  <div className="space-y-1.5 md:col-span-1">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">
+                      Nº Lista (Separação)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 21971..."
+                      value={listId}
+                      onChange={(e) => {
+                        const newCode = Number(e.target.value);
+                        setActivityCode(newCode);
+                      
+                        if (newCode !== 1) {
+                          setListId('');
+                        }
+                      }}
+                      id="input-activity-list"
+                      className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl px-4 py-2.5 text-slate-700 text-sm transition font-mono outline-hidden"
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-1.5 md:col-span-1">
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Horário Inicial</label>
