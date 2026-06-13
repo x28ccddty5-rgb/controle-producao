@@ -13,6 +13,9 @@ interface ActivityManagementProps {
   isAdmin?: boolean;
   collaboratorsList?: string[];
   activitiesList?: { code: number; label: string }[];
+
+  editingActivity?: Activity | null;
+  setEditingActivity?: (activity: Activity | null) => void;
 }
 
 const COLLABORATORS = ['Sara', 'Carlos', 'Marcos', 'João', 'Rafael', 'Luan', 'Karl', 'Luis', 'Daniel'];
@@ -31,16 +34,20 @@ const ACTIVITIES_LIST = [
   { code: 11, label: 'Outros' }
 ];
 
-export default function ActivityManagement({ 
-  activities, 
-  onAddActivity, 
-  onUpdateActivityQuantity, 
+export default function ActivityManagement({
+  activities,
+  onAddActivity,
+  onUpdateActivityQuantity,
   onUpdateActivityStatus,
   onDeleteActivity,
   isAdmin,
   collaboratorsList,
-  activitiesList
-}: ActivityManagementProps) {
+  activitiesList,
+
+  editingActivity,
+  setEditingActivity
+
+}: ActivityManagementProps)
   const collaboratorsToUse = collaboratorsList || COLLABORATORS;
   const activitiesToUse = activitiesList || ACTIVITIES_LIST;
 
