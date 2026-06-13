@@ -501,13 +501,30 @@ const handleDeleteStoppageType = async (
     async function loadData() {
       try {
         if (isSupabaseConfigured()) {
-          const acts = await dbFetchActivities();
-          const stops = await dbFetchStoppages();
+          const activityTypes =
+            await dbFetchActivityTypes();
+          const stoppageTypes =
+            await dbFetchStoppageTypes();
           const pLogs = await dbFetchLogs();
           
           if (acts !== null && stops !== null && pLogs !== null) {
-            setActivities(acts);
-            setStoppages(stops);
+            if (activityTypes) {
+              setActivitiesList(
+                activityTypes.map(item => ({
+                  code: item.code,
+                  label: item.label
+                }))
+              );
+            }
+            
+            if (stoppageTypes) {
+              setStoppagesList(
+                stoppageTypes.map(item => ({
+                  code: item.code,
+                  name: item.name
+                }))
+              );
+            }
             setLogs(pLogs);
             
             localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(acts));
