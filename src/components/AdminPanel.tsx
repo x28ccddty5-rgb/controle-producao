@@ -73,7 +73,7 @@ export default function AdminPanel({
 
   onCreateUser,
   onUpdateUser,
-  onDeleteUser
+  onDeleteUser,
   
   onCreateActivityType,
   onDeleteActivityType,
