@@ -927,11 +927,27 @@ const handleDeleteStoppageType = async (
         11: 'Outros'
       };
 
-      const id = crypto.randomUUID();
+      const formattedDate =
+      productionDate.split('-').reverse().join('/');
+      
+      const dateParts =
+      productionDate.split('-');
+    
+    const formattedDateKey =
+      `${dateParts[0]}${dateParts[1]}${dateParts[2]}`;
+    
+    const operatorKey =
+      collaborator
+        .toUpperCase()
+        .trim()
+        .replace(/\s+/g, '-');
+    
+    const id =
+      `${formattedDateKey}_${operatorKey}_${Date.now()}`;
 
       const activity: Activity = {
         id,
-        date: productionDate,
+        date: formattedDate,
         operator: collaborator,
 
         activityCode: Number(row.code),
@@ -971,7 +987,7 @@ const handleDeleteStoppageType = async (
     }
 
     if (row.type === 'PARADA') {
-
+      
       const stoppageMap: Record<number, string> = {
         1: 'BANHEIRO / ÁGUA',
         2: 'TRABALHANDO EM OUTRO SETOR',
@@ -988,7 +1004,23 @@ const handleDeleteStoppageType = async (
         13: 'OUTROS'
       };
 
-      const id = crypto.randomUUID();
+      const formattedDate =
+      productionDate.split('-').reverse().join('/');
+      
+      const dateParts =
+        productionDate.split('-');
+      
+      const formattedDateKey =
+        `${dateParts[0]}${dateParts[1]}${dateParts[2]}`;
+      
+      const operatorKey =
+        collaborator
+          .toUpperCase()
+          .trim()
+          .replace(/\s+/g, '-');
+      
+      const id =
+        `${formattedDateKey}_${operatorKey}_${Date.now()}`;
   
         const [sh, sm] =
         row.startTime.split(':').map(Number);
@@ -1005,7 +1037,7 @@ const handleDeleteStoppageType = async (
             
       const stoppage: Stoppage = {
         id,
-        date: productionDate,
+        date: formattedDate,
         operator: collaborator,
 
         stoppageCode:
