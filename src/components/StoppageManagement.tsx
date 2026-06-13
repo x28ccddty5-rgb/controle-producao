@@ -183,16 +183,35 @@ export default function StoppageManagement({
 
     const durationStr = handleCalculateDuration(startTime, endTime);
 
-    onAddStoppage({
-      operator,
-      stoppageCode: Number(stoppageCode),
-      notes: notes.trim() ? notes : undefined,
-      date: formattedDate,
-      startTime: startTime,
-      endTime: endTime,
-      duration: durationStr,
-      isRetroactive: true
-    });
+      if (editingStoppage && onUpdateStoppage) {
+      
+        onUpdateStoppage({
+          ...editingStoppage,
+      
+          operator,
+          stoppageCode: Number(stoppageCode),
+      
+          notes: notes.trim() ? notes : undefined,
+      
+          date: formattedDate,
+          startTime,
+          endTime
+        });
+      
+      } else {
+      
+        onAddStoppage({
+          operator,
+          stoppageCode: Number(stoppageCode),
+          notes: notes.trim() ? notes : undefined,
+          date: formattedDate,
+          startTime,
+          endTime,
+          duration: durationStr,
+          isRetroactive: true
+        });
+      
+      }
 
     // Reset layout input states except operator/date
     setNotes('');
@@ -211,6 +230,8 @@ export default function StoppageManagement({
       const now = new Date();
       return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     });
+    setEditingStoppage?.(null);
+    
     setIsFormOpen(false);
   };
 
