@@ -258,6 +258,18 @@ export default function ProductionBatch({
                           : ''
                       }`}
                       value={row.listId}
+                      onChange={(e) =>
+                      setRows(prev =>
+                        prev.map(r =>
+                          r.id === row.id
+                            ? {
+                                ...r,
+                                listId: e.target.value
+                              }
+                            : r
+                        )
+                      )
+                    }
                       disabled={row.type === 'PARADA'}
                     />
                   </td>
@@ -267,6 +279,18 @@ export default function ProductionBatch({
                       type="time"
                       className="border rounded px-2 py-1 w-full"
                       value={row.startTime}
+                      onChange={(e) =>
+                      setRows(prev =>
+                        prev.map(r =>
+                          r.id === row.id
+                            ? {
+                                ...r,
+                                startTime: e.target.value
+                              }
+                            : r
+                        )
+                      )
+                    }
                     />
                   </td>
             
@@ -275,6 +299,18 @@ export default function ProductionBatch({
                       type="time"
                       className="border rounded px-2 py-1 w-full"
                       value={row.endTime}
+                      onChange={(e) =>
+                      setRows(prev =>
+                        prev.map(r =>
+                          r.id === row.id
+                            ? {
+                                ...r,
+                                endTime: e.target.value
+                              }
+                            : r
+                        )
+                      )
+                    }
                     />
                   </td>
             
@@ -286,6 +322,18 @@ export default function ProductionBatch({
                           : ''
                       }`}
                       value={row.palletJackId}
+                      onChange={(e) =>
+                      setRows(prev =>
+                        prev.map(r =>
+                          r.id === row.id
+                            ? {
+                                ...r,
+                                palletJackId: e.target.value
+                              }
+                            : r
+                        )
+                      )
+                    }
                       disabled={row.type === 'PARADA'}
                     />
                   </td>
@@ -298,6 +346,18 @@ export default function ProductionBatch({
                           : ''
                       }`}
                       value={row.forkliftId}
+                      onChange={(e) =>
+                      setRows(prev =>
+                        prev.map(r =>
+                          r.id === row.id
+                            ? {
+                                ...r,
+                                forkliftId: e.target.value
+                              }
+                            : r
+                        )
+                      )
+                    }
                       disabled={row.type === 'PARADA'}
                     />
                   </td>
@@ -310,6 +370,18 @@ export default function ProductionBatch({
                           : ''
                       }`}
                       value={row.producedQuantity}
+                      onChange={(e) =>
+                      setRows(prev =>
+                        prev.map(r =>
+                          r.id === row.id
+                            ? {
+                                ...r,
+                                producedQuantity: Number(e.target.value)
+                              }
+                            : r
+                        )
+                      )
+                    }
                       disabled={row.type === 'PARADA'}
                     />
                   </td>
@@ -322,6 +394,18 @@ export default function ProductionBatch({
                           : ''
                       }`}
                       value={row.itemsQuantity}
+                      onChange={(e) =>
+                      setRows(prev =>
+                        prev.map(r =>
+                          r.id === row.id
+                            ? {
+                                ...r,
+                                itemsQuantity: Number(e.target.value)
+                              }
+                            : r
+                        )
+                      )
+                    }
                       disabled={row.type === 'PARADA'}
                     />
                   </td>
@@ -330,6 +414,18 @@ export default function ProductionBatch({
                     <input
                       className="border rounded px-2 py-1 w-full"
                       value={row.notes}
+                      onChange={(e) =>
+                      setRows(prev =>
+                        prev.map(r =>
+                          r.id === row.id
+                            ? {
+                                ...r,
+                                notes: e.target.value
+                              }
+                            : r
+                        )
+                      )
+                    }
                     />
                   </td>
             
