@@ -1083,7 +1083,7 @@ export default function App() {
                 </button>
               )}
 
-              {(sessionUser === 'producao' ||
+              (sessionUser === 'producao' ||
                  sessionUser === 'lideranca' ||
                  sessionUser === 'adm') && (
                 <>
