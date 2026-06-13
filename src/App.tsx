@@ -1556,6 +1556,12 @@ const handleDeleteStoppageType = async (
                   onCreateUser={handleCreateUser}
                   onUpdateUser={handleUpdateUser}
                   onDeleteUser={handleDeleteUser}
+
+                  onCreateActivityType={handleCreateActivityType}
+                  onDeleteActivityType={handleDeleteActivityType}
+                  
+                  onCreateStoppageType={handleCreateStoppageType}
+                  onDeleteStoppageType={handleDeleteStoppageType}
                 />
               )}
             </div>
