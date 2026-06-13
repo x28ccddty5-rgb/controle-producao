@@ -14,11 +14,65 @@ interface ProductionBatchProps {
   }[];
 }
 
+interface BatchRow {
+  id: string;
+
+  type: 'ATIVIDADE' | 'PARADA';
+
+  code: string;
+
+  local: string;
+
+  listId: string;
+
+  startTime: string;
+
+  endTime: string;
+
+  palletJackId: string;
+
+  forkliftId: string;
+
+  producedQuantity: number;
+
+  itemsQuantity: number;
+
+  notes: string;
+}
+
 export default function ProductionBatch({
   collaborators,
   activitiesList,
   stoppagesList
 }: ProductionBatchProps) {
+
+  const [rows, setRows] = React.useState<BatchRow[]>([
+  {
+    id: crypto.randomUUID(),
+
+    type: 'ATIVIDADE',
+
+    code: '',
+
+    local: '',
+
+    listId: '',
+
+    startTime: '',
+
+    endTime: '',
+
+    palletJackId: '',
+
+    forkliftId: '',
+
+    producedQuantity: 0,
+
+    itemsQuantity: 0,
+
+    notes: ''
+  }
+]);
   
   return (
     <div className="space-y-6">
@@ -49,7 +103,18 @@ export default function ProductionBatch({
             <select
               className="w-full border border-slate-300 rounded-lg px-3 py-2"
             >
-              <option>Selecione...</option>
+              <option value="">
+                Selecione...
+              </option>
+            
+              {collaborators.map(collab => (
+                <option
+                  key={collab}
+                  value={collab}
+                >
+                  {collab}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -84,61 +149,154 @@ export default function ProductionBatch({
             </thead>
 
             <tbody>
+              
+                <tr>
+                  
+                    {rows.map(row => (
+                      <tr key={row.id}>
 
-              <tr>
-
-                <td className="p-2">
-                  <select className="border rounded px-2 py-1 w-full">
-                    <option>Atividade</option>
-                    <option>Parada</option>
-                  </select>
-                </td>
-
-                <td className="p-2">
-                  <input className="border rounded px-2 py-1 w-full" />
-                </td>
-
-                <td className="p-2">
-                  <input className="border rounded px-2 py-1 w-full" />
-                </td>
-
-                <td className="p-2">
-                  <input className="border rounded px-2 py-1 w-full" />
-                </td>
-
-                <td className="p-2">
-                  <input type="time" className="border rounded px-2 py-1 w-full" />
-                </td>
-
-                <td className="p-2">
-                  <input type="time" className="border rounded px-2 py-1 w-full" />
-                </td>
-
-                <td className="p-2">
-                  <input className="border rounded px-2 py-1 w-full" />
-                </td>
-
-                <td className="p-2">
-                  <input className="border rounded px-2 py-1 w-full" />
-                </td>
-
-                <td className="p-2">
-                  <input type="number" className="border rounded px-2 py-1 w-full" />
-                </td>
-
-                <td className="p-2">
-                  <input type="number" className="border rounded px-2 py-1 w-full" />
-                </td>
-
-                <td className="p-2">
-                  <input className="border rounded px-2 py-1 w-full" />
-                </td>
-
-              </tr>
+                    <td className="p-2">
+                      <select
+                        className="border rounded px-2 py-1 w-full"
+                        value={row.type}
+                      >
+                        <option value="ATIVIDADE">
+                          Atividade
+                        </option>
+                  
+                        <option value="PARADA">
+                          Parada
+                        </option>
+                      </select>
+                    </td>
+                  
+                    <td className="p-2">
+                      <input
+                        className="border rounded px-2 py-1 w-full"
+                        value={row.code}
+                      />
+                    </td>
+                  
+                    <td className="p-2">
+                      <input
+                        className="border rounded px-2 py-1 w-full"
+                        value={row.local}
+                      />
+                    </td>
+                  
+                    <td className="p-2">
+                      <input
+                        className="border rounded px-2 py-1 w-full"
+                        value={row.listId}
+                      />
+                    </td>
+                  
+                    <td className="p-2">
+                      <input
+                        type="time"
+                        className="border rounded px-2 py-1 w-full"
+                        value={row.startTime}
+                      />
+                    </td>
+                  
+                    <td className="p-2">
+                      <input
+                        type="time"
+                        className="border rounded px-2 py-1 w-full"
+                        value={row.endTime}
+                      />
+                    </td>
+                  
+                    <td className="p-2">
+                      <input
+                        className="border rounded px-2 py-1 w-full"
+                        value={row.palletJackId}
+                      />
+                    </td>
+                  
+                    <td className="p-2">
+                      <input
+                        className="border rounded px-2 py-1 w-full"
+                        value={row.forkliftId}
+                      />
+                    </td>
+                  
+                    <td className="p-2">
+                      <input
+                        type="number"
+                        className="border rounded px-2 py-1 w-full"
+                        value={row.producedQuantity}
+                      />
+                    </td>
+                  
+                    <td className="p-2">
+                      <input
+                        type="number"
+                        className="border rounded px-2 py-1 w-full"
+                        value={row.itemsQuantity}
+                      />
+                    </td>
+                  
+                    <td className="p-2">
+                      <input
+                        className="border rounded px-2 py-1 w-full"
+                        value={row.notes}
+                      />
+                    </td>
+                  
+                  </tr>
+                  
+                  ))}
 
             </tbody>
 
           </table>
+
+            <div className="mt-4">
+              <button
+                onClick={() =>
+                  setRows(prev => [
+                    ...prev,
+                    {
+                      id: crypto.randomUUID(),
+            
+            ```
+                  type: 'ATIVIDADE',
+            
+                  code: '',
+            
+                  local: '',
+            
+                  listId: '',
+            
+                  startTime: '',
+            
+                  endTime: '',
+            
+                  palletJackId: '',
+            
+                  forkliftId: '',
+            
+                  producedQuantity: 0,
+            
+                  itemsQuantity: 0,
+            
+                  notes: ''
+                }
+              ])
+            }
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+            ```
+            
+            >
+            
+            ```
+            + Inserir Linha
+            ```
+            
+              </button>
+            </div>
+
 
         </div>
       </div>
