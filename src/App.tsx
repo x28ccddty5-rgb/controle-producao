@@ -111,11 +111,6 @@ export default function App() {
 
       setUsersList(users);
 
-      localStorage.setItem(
-        'porto_custom_users_v2',
-        JSON.stringify(users)
-      );
-
       return;
     }
 
@@ -173,53 +168,14 @@ const loadStoppageTypes = async () => {
     return ['Sara', 'Carlos', 'Marcos', 'João', 'Rafael', 'Luan', 'Karl', 'Luis', 'Daniel'];
   });
 
-  const [activitiesList, setActivitiesList] = useState<{ code: number; label: string }[]>(() => {
-    const saved = localStorage.getItem('porto_activities');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {}
-    }
-    return [
-      { code: 1, label: 'Separação' },
-      { code: 2, label: 'Armazenamento' },
-      { code: 3, label: 'Remontar Picadeiras' },
-      { code: 4, label: 'Trocar Strechs dos Pallets' },
-      { code: 5, label: 'Movimentação' },
-      { code: 6, label: 'Atualizar Etiquetas' },
-      { code: 7, label: 'Endereçamento' },
-      { code: 8, label: 'Empilhamento' },
-      { code: 9, label: 'Liberando peças do Forno' },
-      { code: 10, label: 'Inventário Rotativo' },
-      { code: 11, label: 'Outros' }
-    ];
-  });
+  const [activitiesList, setActivitiesList] = useState<
+  { code: number; label: string }[]
+>([]);
 
-  const [stoppagesList, setStoppagesList] = useState<{ code: number; name: string }[]>(() => {
-    const saved = localStorage.getItem('porto_stoppages');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {}
-    }
-    return [
-      { code: 1, name: 'Banheiro/Água' },
-      { code: 2, name: 'Trabalhando em outro setor' },
-      { code: 3, name: 'Treinamento' },
-      { code: 4, name: 'Reunião' },
-      { code: 5, name: 'Limpeza do setor' },
-      { code: 6, name: 'Auxiliando funcionário de outro setor' },
-      { code: 7, name: 'Inventário Pontual' },
-      { code: 8, name: 'Equipamento com problema' },
-      { code: 9, name: 'Procurando Pallet não encontrado' },
-      { code: 10, name: 'Checklist do setor' },
-      { code: 11, name: 'Descarte de quebra' },
-      { code: 12, name: 'Auditoria' },
-      { code: 13, name: 'Outros' }
-    ];
-  });
+  const [stoppagesList, setStoppagesList] =
+  useState<
+    { code: number; name: string }[]
+  >([]);
 
   // Global Launch metadata configured once by the launcher in the sidebar
   const [globalCreator, setGlobalCreator] = useState(() => {
@@ -1549,19 +1505,14 @@ const handleDeleteStoppageType = async (
                   activitiesList={activitiesList}
                   onUpdateActivitiesList={(newList) => {
                     setActivitiesList(newList);
-                    localStorage.setItem('porto_activities', JSON.stringify(newList));
                   }}
                   stoppagesList={stoppagesList}
                   onUpdateStoppagesList={(newList) => {
                     setStoppagesList(newList);
-                    localStorage.setItem('porto_stoppages', JSON.stringify(newList));
                   }}
                   usersList={usersList}
                   onUpdateUsersList={(newList) => {
                     setUsersList(newList);
-                    localStorage.setItem(
-                      'porto_custom_users_v2',
-                      JSON.stringify(newList)
                     );
                   }}
                   onCreateUser={handleCreateUser}
