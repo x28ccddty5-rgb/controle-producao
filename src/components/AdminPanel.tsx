@@ -52,7 +52,7 @@ export default function AdminPanel({
 const [newUserName, setNewUserName] = useState('');
 const [newUserUsername, setNewUserUsername] = useState('');
 const [newUserPassword, setNewUserPassword] = useState('');
-const [newUserRole, setNewUserRole] = useState<'producao' | 'supervisor' | 'visualizador'>('producao');
+const [newUserRole, setNewUserRole] = useState<'producao' | 'lideranca' | 'visualizador' | 'adm'>('producao');
 
 const [editingUsername, setEditingUsername] = useState<string | null>(null);
 
@@ -599,7 +599,8 @@ if (editingUsername) {
                     className="w-full bg-white border border-slate-205 rounded-xl px-4 py-2 text-slate-705 cursor-pointer outline-hidden"
                   >
                     <option value="producao">Sara - Produção (Lança tarefas / paradas / vê histórico)</option>
-                    <option value="supervisor">Supervisor / Gerência (Pode apagar dados / ver dashboard)</option>
+                    <option value="adm">lideranca / Gerência (Pode apagar dados / ver dashboard)</option>
+                    <option value="adm">adm / Gerência (Pode apagar dados / ver dashboard)</option>
                     <option value="visualizador">Somente Dashboard (Não acessa outras guias)</option>
                   </select>
                 </div>
@@ -654,15 +655,15 @@ if (editingUsername) {
                           
                             <span
                               className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${
-                                u.role === 'supervisor'
+                                u.role === 'adm'
                                   ? 'bg-blue-50 text-blue-700'
                                   : u.role === 'visualizador'
                                   ? 'bg-amber-50 text-amber-700'
                                   : 'bg-slate-100 text-slate-650'
                               }`}
                             >
-                              {u.role === 'supervisor'
-                                ? 'SUPERVISOR'
+                              {u.role === 'adm'
+                                ? 'adm'
                                 : u.role === 'visualizador'
                                 ? 'VISUALIZADOR'
                                 : 'OPERAÇÃO'}
