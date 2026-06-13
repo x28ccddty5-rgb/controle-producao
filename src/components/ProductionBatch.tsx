@@ -227,13 +227,25 @@ export default function ProductionBatch({
                   </td>
             
                   <td className="p-2">
-                   <input
+                    <input
                       className={`border rounded px-2 py-1 w-full ${
                         row.type === 'PARADA'
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                           : ''
                       }`}
                       value={row.local}
+                      onChange={(e) =>
+                        setRows(prev =>
+                          prev.map(r =>
+                            r.id === row.id
+                              ? {
+                                  ...r,
+                                  local: e.target.value
+                                }
+                              : r
+                          )
+                        )
+                      }
                       disabled={row.type === 'PARADA'}
                     />
                   </td>
