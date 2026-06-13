@@ -286,11 +286,17 @@ export default function App() {
       return;
     }
 
+    const existingUser = usersList.find(
+    u => u.username === editingUsername
+    );
+    
     const newUser: CustomUser = {
+      id: existingUser?.id,
+    
       username,
       name,
       password,
-      role
+      role: newUserRole
     };
 
     const updatedList = [...usersList, newUser];
