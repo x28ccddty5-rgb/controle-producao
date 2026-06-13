@@ -47,7 +47,7 @@ export default function ActivityManagement({
   editingActivity,
   setEditingActivity
 
-}: ActivityManagementProps)
+}: ActivityManagementProps) {
   const collaboratorsToUse = collaboratorsList || COLLABORATORS;
   const activitiesToUse = activitiesList || ACTIVITIES_LIST;
 
