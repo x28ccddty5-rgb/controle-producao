@@ -16,6 +16,8 @@ interface ProductionBatchProps {
   onAddActivity: (activity: any) => void;
 
   onAddStoppage: (stoppage: any) => void;
+
+  onAddBatch: (rows: BatchRow[], productionDate: string, collaborator: string) => void;
 }
 
 interface BatchRow {
@@ -50,7 +52,8 @@ export default function ProductionBatch({
   stoppagesList,
 
   onAddActivity,
-  onAddStoppage
+  onAddStoppage,
+  onAddBatch
 }: ProductionBatchProps) {
 
   const [productionDate, setProductionDate] =
@@ -133,91 +136,13 @@ export default function ProductionBatch({
     alert('Selecione um colaborador.');
     return;
   }
+
+    onAddBatch(
+    rows,
+    productionDate,
+    selectedCollaborator
+  );
     
-    for (const row of rows) {
-
-      if (row.type === 'ATIVIDADE') {
-
-        const selectedActivity =
-          activitiesList.find(
-            activity =>
-              String(activity.code) === row.code
-          );
-
-        console.log(
-          'SALVANDO ATIVIDADE',
-          row
-        );
-
-        onAddActivity({
-          isRetroactive: true,
-
-          date: productionDate,
-          operator: selectedCollaborator,
-
-          activityCode: Number(row.code),
-
-          activityName:
-            selectedActivity?.label || '',
-
-          local: row.local,
-
-          listId: row.listId,
-
-          startTime: row.startTime,
-
-          endTime: row.endTime,
-
-          palletJackId: row.palletJackId,
-
-          forkliftId: row.forkliftId,
-
-          producedQuantity:
-            row.producedQuantity,
-
-          itemsQuantity:
-            row.itemsQuantity,
-
-          notes: row.notes
-        });
-
-      }
-
-      if (row.type === 'PARADA') {
-
-        const selectedStoppage =
-          stoppagesList.find(
-            stoppage =>
-              String(stoppage.code) === row.code
-          );
-
-        console.log(
-          'SALVANDO PARADA',
-          row
-        );
-
-        onAddStoppage({
-          isRetroactive: true,
-
-          date: productionDate,
-          operator: selectedCollaborator,
-
-          stoppageCode: Number(row.code),
-
-          stoppageName:
-            selectedStoppage?.name || '',
-
-          startTime: row.startTime,
-
-          endTime: row.endTime,
-
-          notes: row.notes
-        });
-
-      }
-
-    }
-
     setRows([
   {
     id: crypto.randomUUID(),
