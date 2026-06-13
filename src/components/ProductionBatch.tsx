@@ -149,8 +149,6 @@ export default function ProductionBatch({
             </thead>
 
             <tbody>
-              
-                <tr>
                   
                     {rows.map(row => (
                       <tr key={row.id}>
@@ -260,43 +258,35 @@ export default function ProductionBatch({
                     {
                       id: crypto.randomUUID(),
             
-            ```
-                  type: 'ATIVIDADE',
+                      type: 'ATIVIDADE',
             
-                  code: '',
+                      code: '',
             
-                  local: '',
+                      local: '',
             
-                  listId: '',
+                      listId: '',
             
-                  startTime: '',
+                      startTime: '',
             
-                  endTime: '',
+                      endTime: '',
             
-                  palletJackId: '',
+                      palletJackId: '',
             
-                  forkliftId: '',
+                      forkliftId: '',
             
-                  producedQuantity: 0,
+                      producedQuantity: 0,
             
-                  itemsQuantity: 0,
+                      itemsQuantity: 0,
             
-                  notes: ''
+                      notes: ''
+                    }
+                  ])
                 }
-              ])
-            }
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-            ```
-            
-            >
-            
-            ```
-            + Inserir Linha
-            ```
-            
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+              >
+                + Inserir Linha
               </button>
             </div>
-
 
         </div>
       </div>
