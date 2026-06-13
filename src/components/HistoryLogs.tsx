@@ -12,16 +12,22 @@ interface HistoryLogsProps {
   onEditActivity?: (activity: Activity) => void;
   
   onDeleteStoppage?: (id: string) => void;
+  onEditStoppage?: (stoppage: Stoppage) => void;
   isAdmin?: boolean;
 }
 
 export default function HistoryLogs({ 
   activities, 
   stoppages, 
+  
   onClearLogs,
+  
   onDeleteActivity,
   onEditActivity,
+  
   onDeleteStoppage,
+  onEditStoppage,
+  
   isAdmin
 }: HistoryLogsProps) {
   const [activeSheetTab, setActiveSheetTab] = useState<'ACTIVITIES' | 'STOPPAGES'>('ACTIVITIES');
