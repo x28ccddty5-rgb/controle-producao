@@ -284,6 +284,11 @@ export default function ActivityManagement({
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50/50 px-6 py-4 border-b border-slate-200">
                 <span className="text-xs font-bold text-blue-700 tracking-wider uppercase block">Formulário Digital</span>
                 <h3 className="text-sm font-bold text-slate-800 mt-0.5">Ficha de Controle de Produção • Porto Brasil</h3>
+                {editingActivity && (
+                  <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700">
+                    Editando atividade de {editingActivity.operator}
+                  </div>
+                )}
               </div>
 
               <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
