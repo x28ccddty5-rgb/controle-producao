@@ -6,6 +6,8 @@ import { CheckCircle2, ChevronDown, ChevronUp, FilePlus, AlertCircle, Calendar, 
 interface ActivityManagementProps {
   activities: Activity[];
   onAddActivity: (activity: any) => void;
+  onUpdateActivity?: (activity: Activity) => void;
+  
   onUpdateActivityQuantity: (activityId: string, produced: number, items: number) => void;
   onUpdateActivityStatus: (activityId: string, status: ActivityStatus) => void;
   activeStagedOperators: string[];
@@ -37,6 +39,8 @@ const ACTIVITIES_LIST = [
 export default function ActivityManagement({
   activities,
   onAddActivity,
+  onUpdateActivity,
+  
   onUpdateActivityQuantity,
   onUpdateActivityStatus,
   onDeleteActivity,
@@ -206,22 +210,50 @@ export default function ActivityManagement({
 
     const calculatedDuration = handleCalculateDuration(startTime, endTime);
 
-    onAddActivity({
-      operator,
-      activityCode: selectedCode,
-      local: local.trim(),
-      listId: listId.trim() || 'N/A',
-      palletJackId: palletJackId.trim(),
-      forkliftId: forkliftId.trim(),
-      producedQuantity: Number(producedQuantity) || 0,
-      itemsQuantity: Number(itemsQuantity) || 0,
-      notes: notes.trim() ? notes : undefined,
-      date: formattedDate,
-      startTime: startTime,
-      endTime: endTime,
-      duration: calculatedDuration,
-      isRetroactive: true
-    });
+    if (editingActivity && onUpdateActivity) {
+    
+      onUpdateActivity({
+        ...editingActivity,
+    
+        operator,
+        activityCode: selectedCode,
+        local: local.trim(),
+        listId: listId.trim() || 'N/A',
+    
+        palletJackId: palletJackId.trim(),
+        forkliftId: forkliftId.trim(),
+    
+        producedQuantity: Number(producedQuantity) || 0,
+        itemsQuantity: Number(itemsQuantity) || 0,
+    
+        notes: notes.trim() ? notes : undefined,
+    
+        date: formattedDate,
+        startTime,
+        endTime,
+        duration: calculatedDuration
+      });
+    
+    } else {
+    
+      onAddActivity({
+        operator,
+        activityCode: selectedCode,
+        local: local.trim(),
+        listId: listId.trim() || 'N/A',
+        palletJackId: palletJackId.trim(),
+        forkliftId: forkliftId.trim(),
+        producedQuantity: Number(producedQuantity) || 0,
+        itemsQuantity: Number(itemsQuantity) || 0,
+        notes: notes.trim() ? notes : undefined,
+        date: formattedDate,
+        startTime,
+        endTime,
+        duration: calculatedDuration,
+        isRetroactive: true
+      });
+    
+    }
 
     // Reset layout input states
     setLocal('');
@@ -241,6 +273,9 @@ export default function ActivityManagement({
     });
     setProducedQuantity(0);
     setItemsQuantity(0);
+
+    setEditingActivity?.(null);
+    
     setIsFormOpen(false);
   };
 
