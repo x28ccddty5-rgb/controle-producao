@@ -21,16 +21,41 @@ import {
 interface AdminPanelProps {
   collaborators: string[];
   onUpdateCollaborators: (newCollabs: string[]) => void;
+  
   activitiesList: { code: number; label: string }[];
   onUpdateActivitiesList: (newList: { code: number; label: string }[]) => void;
+  
   stoppagesList: { code: number; name: string }[];
   onUpdateStoppagesList: (newList: { code: number; name: string }[]) => void;
+  
   usersList: CustomUser[];
   onUpdateUsersList: (newList: CustomUser[]) => void;
 
   onCreateUser: (user: CustomUser) => Promise<void>;
   onUpdateUser: (user: CustomUser) => Promise<void>;
   onDeleteUser: (username: string) => Promise<void>;
+
+  onCreateActivityType: (
+  activityType: {
+    code: number;
+    label: string;
+  }
+) => Promise<void>;
+
+onDeleteActivityType: (
+  code: number
+) => Promise<void>;
+
+onCreateStoppageType: (
+  stoppageType: {
+    code: number;
+    name: string;
+  }
+) => Promise<void>;
+
+onDeleteStoppageType: (
+  code: number
+) => Promise<void>;
 }
 
 export default function AdminPanel({
@@ -49,6 +74,12 @@ export default function AdminPanel({
   onCreateUser,
   onUpdateUser,
   onDeleteUser
+  
+  onCreateActivityType,
+  onDeleteActivityType,
+  
+  onCreateStoppageType,
+  onDeleteStoppageType,
 }: AdminPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<'collab' | 'activity' | 'stoppage' | 'users'>('collab');
 
