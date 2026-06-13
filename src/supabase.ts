@@ -196,6 +196,163 @@ export async function dbDeleteStoppage(id: string): Promise<boolean> {
   }
 }
 
+export async function dbFetchActivityTypes() {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('activity_types')
+      .select('*')
+      .eq('active', true)
+      .order('code');
+
+    if (error) {
+      console.error(error);
+      return null;
+    }
+
+    return data;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+export async function dbSaveActivityType(
+  activityType: {
+    code: number;
+    label: string;
+  }
+) {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('activity_types')
+      .upsert({
+        code: activityType.code,
+        label: activityType.label,
+        active: true
+      });
+
+    if (error) {
+      console.error(error);
+      return false;
+    }
+
+    return true;
+
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
+
+export async function dbDeleteActivityType(
+  code: number
+) {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('activity_types')
+      .update({
+        active: false
+      })
+      .eq('code', code);
+
+    if (error) {
+      console.error(error);
+      return false;
+    }
+
+    return true;
+
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
+
+export async function dbFetchStoppageTypes() {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('stoppage_types')
+      .select('*')
+      .eq('active', true)
+      .order('code');
+
+    if (error) {
+      console.error(error);
+      return null;
+    }
+
+    return data;
+
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+export async function dbSaveStoppageType(
+  stoppageType: {
+    code: number;
+    name: string;
+  }
+) {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('stoppage_types')
+      .upsert({
+        code: stoppageType.code,
+        name: stoppageType.name,
+        active: true
+      });
+
+    if (error) {
+      console.error(error);
+      return false;
+    }
+
+    return true;
+
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
+
+export async function dbDeleteStoppageType(
+  code: number
+) {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('stoppage_types')
+      .update({
+        active: false
+      })
+      .eq('code', code);
+
+    if (error) {
+      console.error(error);
+      return false;
+    }
+
+    return true;
+
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
+
 // ProductionLog API
 export async function dbFetchLogs(): Promise<ProductionLog[] | null> {
   if (!supabase) return null;
