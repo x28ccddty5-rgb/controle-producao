@@ -219,9 +219,19 @@ export default function ProductionBatch({
               <tr className="border-b border-slate-300">
 
                 <th className="text-left p-2">Tipo</th>
-                <th className="text-left p-2">Código</th>
-                <th className="text-left p-2">Local</th>
-                <th className="text-left p-2">Lista</th>
+                <th className="text-left p-2 w-[120px]">Tipo</th>
+
+                <th className="text-left p-2 w-[260px]">
+                  Código
+                </th>
+                
+                <th className="text-left p-2 w-[80px]">
+                  Local
+                </th>
+                
+                <th className="text-left p-2 w-[90px]">
+                  Lista
+                </th>
                 <th className="text-left p-2">Início</th>
                 <th className="text-left p-2">Fim</th>
                 <th className="text-left p-2">Mov. Paleteira</th>
@@ -243,7 +253,7 @@ export default function ProductionBatch({
                   className="border-b border-slate-200"
                 >
             
-                  <td className="p-2">
+                  <td className="p-2 w-[120px]">
                     <select
                       className="border rounded px-2 py-1 w-full"
                       value={row.type}
@@ -270,7 +280,7 @@ export default function ProductionBatch({
                       </option>
                     </select>
                   </td>
-                  <td className="p-2">
+                  <td className="p-2 w-[260px]">
                     <select
                       className="border rounded px-2 py-1 w-full"
                       value={row.code}
@@ -311,7 +321,7 @@ export default function ProductionBatch({
                     </select>
                   </td>
             
-                  <td className="p-2">
+                  <td className="p-2 w-[80px]">
                     <input
                       className={`border rounded px-2 py-1 w-full ${
                         row.type === 'PARADA'
@@ -335,7 +345,7 @@ export default function ProductionBatch({
                     />
                   </td>
             
-                  <td className="p-2">
+                  <td className="p-2 w-[90px]">
                     <input
                       className={`border rounded px-2 py-1 w-full ${
                         row.type === 'PARADA'
