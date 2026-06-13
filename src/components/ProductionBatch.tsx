@@ -126,12 +126,12 @@ export default function ProductionBatch({
           Lançamentos
         </h3>
 
-        <div className="overflow-x-auto">
+         <div className="overflow-auto max-h-[500px] border border-slate-200 rounded-lg">
 
           <table className="w-full text-sm">
 
-            <thead>
-              <tr className="border-b">
+            <thead className="sticky top-0 bg-slate-100 z-10">
+              <tr className="border-b border-slate-300">
 
                 <th className="text-left p-2">Tipo</th>
                 <th className="text-left p-2">Código</th>
@@ -144,110 +144,150 @@ export default function ProductionBatch({
                 <th className="text-left p-2">Qtd Pçs</th>
                 <th className="text-left p-2">Qtd Itens</th>
                 <th className="text-left p-2">Observação</th>
+                <th className="text-center p-2">Remover</th>
 
               </tr>
             </thead>
 
             <tbody>
-                  
-                    {rows.map(row => (
-                      <tr key={row.id}>
 
-                    <td className="p-2">
-                      <select
-                        className="border rounded px-2 py-1 w-full"
-                        value={row.type}
-                      >
-                        <option value="ATIVIDADE">
-                          Atividade
-                        </option>
-                  
-                        <option value="PARADA">
-                          Parada
-                        </option>
-                      </select>
-                    </td>
-                  
-                    <td className="p-2">
-                      <input
-                        className="border rounded px-2 py-1 w-full"
-                        value={row.code}
-                      />
-                    </td>
-                  
-                    <td className="p-2">
-                      <input
-                        className="border rounded px-2 py-1 w-full"
-                        value={row.local}
-                      />
-                    </td>
-                  
-                    <td className="p-2">
-                      <input
-                        className="border rounded px-2 py-1 w-full"
-                        value={row.listId}
-                      />
-                    </td>
-                  
-                    <td className="p-2">
-                      <input
-                        type="time"
-                        className="border rounded px-2 py-1 w-full"
-                        value={row.startTime}
-                      />
-                    </td>
-                  
-                    <td className="p-2">
-                      <input
-                        type="time"
-                        className="border rounded px-2 py-1 w-full"
-                        value={row.endTime}
-                      />
-                    </td>
-                  
-                    <td className="p-2">
-                      <input
-                        className="border rounded px-2 py-1 w-full"
-                        value={row.palletJackId}
-                      />
-                    </td>
-                  
-                    <td className="p-2">
-                      <input
-                        className="border rounded px-2 py-1 w-full"
-                        value={row.forkliftId}
-                      />
-                    </td>
-                  
-                    <td className="p-2">
-                      <input
-                        type="number"
-                        className="border rounded px-2 py-1 w-full"
-                        value={row.producedQuantity}
-                      />
-                    </td>
-                  
-                    <td className="p-2">
-                      <input
-                        type="number"
-                        className="border rounded px-2 py-1 w-full"
-                        value={row.itemsQuantity}
-                      />
-                    </td>
-                  
-                    <td className="p-2">
-                      <input
-                        className="border rounded px-2 py-1 w-full"
-                        value={row.notes}
-                      />
-                    </td>
-                  
-                  </tr>
-                  
-                  ))}
-
+              {rows.map(row => (
+            
+                <tr
+                  key={row.id}
+                  className="border-b border-slate-200"
+                >
+            
+                  <td className="p-2">
+                    <select
+                      className="border rounded px-2 py-1 w-full"
+                      value={row.type}
+                    >
+                      <option value="ATIVIDADE">
+                        Atividade
+                      </option>
+            
+                      <option value="PARADA">
+                        Parada
+                      </option>
+                    </select>
+                  </td>
+            
+                  <td className="p-2">
+                    <select
+                      className="border rounded px-2 py-1 w-full"
+                      value={row.code}
+                    >
+                      <option value="">
+                        Selecione...
+                      </option>
+            
+                      {row.type === 'ATIVIDADE'
+                        ? activitiesList.map(activity => (
+                            <option
+                              key={activity.code}
+                              value={activity.code}
+                            >
+                              {activity.code} - {activity.label}
+                            </option>
+                          ))
+                        : stoppagesList.map(stoppage => (
+                            <option
+                              key={stoppage.code}
+                              value={stoppage.code}
+                            >
+                              {stoppage.code} - {stoppage.name}
+                            </option>
+                          ))}
+                    </select>
+                  </td>
+            
+                  <td className="p-2">
+                    <input
+                      className="border rounded px-2 py-1 w-full"
+                      value={row.local}
+                    />
+                  </td>
+            
+                  <td className="p-2">
+                    <input
+                      className="border rounded px-2 py-1 w-full"
+                      value={row.listId}
+                    />
+                  </td>
+            
+                  <td className="p-2">
+                    <input
+                      type="time"
+                      className="border rounded px-2 py-1 w-full"
+                      value={row.startTime}
+                    />
+                  </td>
+            
+                  <td className="p-2">
+                    <input
+                      type="time"
+                      className="border rounded px-2 py-1 w-full"
+                      value={row.endTime}
+                    />
+                  </td>
+            
+                  <td className="p-2">
+                    <input
+                      className="border rounded px-2 py-1 w-full"
+                      value={row.palletJackId}
+                    />
+                  </td>
+            
+                  <td className="p-2">
+                    <input
+                      className="border rounded px-2 py-1 w-full"
+                      value={row.forkliftId}
+                    />
+                  </td>
+            
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      className="border rounded px-2 py-1 w-full"
+                      value={row.producedQuantity}
+                    />
+                  </td>
+            
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      className="border rounded px-2 py-1 w-full"
+                      value={row.itemsQuantity}
+                    />
+                  </td>
+            
+                  <td className="p-2">
+                    <input
+                      className="border rounded px-2 py-1 w-full"
+                      value={row.notes}
+                    />
+                  </td>
+            
+                  <td className="p-2 text-center">
+                    <button
+                      onClick={() =>
+                        setRows(prev =>
+                          prev.filter(r => r.id !== row.id)
+                        )
+                      }
+                      className="text-red-600 font-bold text-lg"
+                    >
+                      🗑
+                    </button>
+                  </td>
+            
+                </tr>
+            
+              ))}
+            
             </tbody>
-
+            
           </table>
 
             <div className="mt-4">
