@@ -1420,9 +1420,11 @@ const handleDeleteUser = async (
                   usersList={usersList}
                   onUpdateUsersList={(newList) => {
                     setUsersList(newList);
-                    localStorage.setItem('porto_custom_users_v2', JSON.stringify(newList));
-                  );
-                 }}
+                    localStorage.setItem(
+                      'porto_custom_users_v2',
+                      JSON.stringify(newList)
+                    );
+                  }}
                   onCreateUser={handleCreateUser}
                   onUpdateUser={handleUpdateUser}
                   onDeleteUser={handleDeleteUser}
