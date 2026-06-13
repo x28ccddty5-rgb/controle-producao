@@ -122,9 +122,25 @@ export default function ProductionBatch({
 
   const handleSubmitBatch = () => {
 
-  console.log('LOTE COMPLETO');
+  rows.forEach(row => {
 
-  console.log(rows);
+    if (row.type === 'ATIVIDADE') {
+
+      console.log('ATIVIDADE');
+
+      console.log(row);
+
+    }
+
+    if (row.type === 'PARADA') {
+
+      console.log('PARADA');
+
+      console.log(row);
+
+    }
+
+  });
 
 };
   
