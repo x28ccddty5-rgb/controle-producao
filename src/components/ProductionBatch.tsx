@@ -162,17 +162,29 @@ export default function ProductionBatch({
                     <select
                       className="border rounded px-2 py-1 w-full"
                       value={row.type}
+                      onChange={(e) =>
+                        setRows(prev =>
+                          prev.map(r =>
+                            r.id === row.id
+                              ? {
+                                  ...r,
+                                  type: e.target.value as 'ATIVIDADE' | 'PARADA',
+                                  code: ''
+                                }
+                              : r
+                          )
+                        )
+                      }
                     >
                       <option value="ATIVIDADE">
                         Atividade
                       </option>
-            
+                  
                       <option value="PARADA">
                         Parada
                       </option>
                     </select>
                   </td>
-            
                   <td className="p-2">
                     <select
                       className="border rounded px-2 py-1 w-full"
