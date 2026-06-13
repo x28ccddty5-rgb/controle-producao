@@ -12,6 +12,10 @@ interface ProductionBatchProps {
     code: number;
     name: string;
   }[];
+
+  onAddActivity: any;
+
+  onAddStoppage: any;
 }
 
 interface BatchRow {
@@ -43,7 +47,10 @@ interface BatchRow {
 export default function ProductionBatch({
   collaborators,
   activitiesList,
-  stoppagesList
+  stoppagesList,
+
+  onAddActivity,
+  onAddStoppage
 }: ProductionBatchProps) {
 
   const [rows, setRows] = React.useState<BatchRow[]>([
@@ -106,6 +113,14 @@ export default function ProductionBatch({
 
   return totalMinutes;
 };
+
+  const handleSubmitBatch = () => {
+
+  console.log('LOTE COMPLETO');
+
+  console.log(rows);
+
+};
   
   return (
     <div className="space-y-6">
@@ -118,11 +133,12 @@ export default function ProductionBatch({
             </h2>
           
             <button
+              onClick={handleSubmitBatch}
               className="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
             >
               Lançar Lote Completo
             </button>
-          
+                      
           </div>
 
         <div className="grid grid-cols-2 gap-4">
