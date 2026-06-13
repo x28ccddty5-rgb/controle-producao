@@ -265,7 +265,7 @@ export default function App() {
     }
     if (!username) {
       setLoginError('Por favor, defina um Usuário de Login.');
-      return;
+      ;
     }
     if (username.length < 3) {
       setLoginError('O usuário de login deve ter pelo menos 3 letras.');
@@ -321,6 +321,45 @@ export default function App() {
     setRegisterSuccess('');
   };
 
+  const handleCreateUser = async (user: CustomUser) => {
+
+  const success = await dbSaveUser(user);
+
+  if (!success) {
+    alert('Erro ao salvar usuário.');
+    return;
+  }
+
+  await loadUsers();
+};
+
+const handleUpdateUser = async (user: CustomUser) => {
+
+  const success = await dbSaveUser(user);
+
+  if (!success) {
+    alert('Erro ao atualizar usuário.');
+    return;
+  }
+
+  await loadUsers();
+};
+
+const handleDeleteUser = async (
+  username: string
+) => {
+
+  const success =
+    await dbDeleteUser(username);
+
+  if (!success) {
+    alert('Erro ao excluir usuário.');
+    return;
+  }
+
+  await loadUsers();
+};
+  
   const handleSelectUser = (user: string) => {
     setGlobalCreator(user);
     localStorage.setItem('porto_global_creator', user);
@@ -1382,7 +1421,11 @@ export default function App() {
                   onUpdateUsersList={(newList) => {
                     setUsersList(newList);
                     localStorage.setItem('porto_custom_users_v2', JSON.stringify(newList));
-                  }}
+                  );
+                 }}
+                  onCreateUser={handleCreateUser}
+                  onUpdateUser={handleUpdateUser}
+                  onDeleteUser={handleDeleteUser}
                 />
               )}
             </div>
