@@ -897,6 +897,152 @@ const handleDeleteStoppageType = async (
     }
   };
 
+    const handleAddBatch = (
+  rows: any[],
+  productionDate: string,
+  collaborator: string
+) => {
+
+  const newActivities: Activity[] = [];
+
+  const newStoppages: Stoppage[] = [];
+
+  const newLogs: ProductionLog[] = [];
+
+  rows.forEach(row => {
+
+    if (row.type === 'ATIVIDADE') {
+
+      const activityMap: Record<number, string> = {
+        1: 'Separação',
+        2: 'Armazenamento',
+        3: 'Remontar Picadeiras',
+        4: 'Trocar Strechs dos Pallets',
+        5: 'Movimentação',
+        6: 'Atualizar Etiquetas',
+        7: 'Endereçamento',
+        8: 'Empilhamento',
+        9: 'Liberando peças do Forno',
+        10: 'Inventário Rotativo',
+        11: 'Outros'
+      };
+
+      const id = crypto.randomUUID();
+
+      const activity: Activity = {
+        id,
+        date: productionDate,
+        operator: collaborator,
+
+        activityCode: Number(row.code),
+        activityName:
+          activityMap[Number(row.code)] || 'Outros',
+
+        local: row.local,
+        listId: row.listId,
+
+        startTime: row.startTime,
+        endTime: row.endTime,
+
+        duration: '00:00',
+        durationHours: 0,
+
+        palletJackId: row.palletJackId,
+        forkliftId: row.forkliftId,
+
+        producedQuantity:
+          row.producedQuantity,
+
+        itemsQuantity:
+          row.itemsQuantity,
+
+        status: 'CONCLUIDO',
+
+        notes: row.notes,
+
+        creator: globalCreator,
+
+        createdAt:
+          new Date().toLocaleString('pt-BR')
+      };
+
+      newActivities.push(activity);
+
+    }
+
+    if (row.type === 'PARADA') {
+
+      const stoppageMap: Record<number, string> = {
+        1: 'BANHEIRO / ÁGUA',
+        2: 'TRABALHANDO EM OUTRO SETOR',
+        3: 'TREINAMENTO',
+        4: 'REUNIÃO',
+        5: 'LIMPEZA DO SETOR',
+        6: 'AUXILIANDO FUNCIONÁRIO DE OUTRO SETOR',
+        7: 'INVENTÁRIO',
+        8: 'EQUIPAMENTO COM PROBLEMA',
+        9: 'PROCURANDO PALETES NÃO ENCONTRADOS',
+        10: 'CHECKLIST DO SETOR',
+        11: 'DESCARTE DE QUEBRA',
+        12: 'AUDITORIA DETALHADA',
+        13: 'OUTROS'
+      };
+
+      const id = crypto.randomUUID();
+
+      const stoppage: Stoppage = {
+        id,
+        date: productionDate,
+        operator: collaborator,
+
+        stoppageCode:
+          Number(row.code),
+
+        stoppageName:
+          stoppageMap[Number(row.code)] || 'OUTROS',
+
+        startTime: row.startTime,
+        endTime: row.endTime,
+
+        duration: '00:15',
+        durationMinutes: 15,
+
+        status: 'RESOLVIDA',
+
+        notes: row.notes,
+
+        creator: globalCreator,
+
+        createdAt:
+          new Date().toLocaleString('pt-BR')
+      };
+
+      newStoppages.push(stoppage);
+
+    }
+
+  });
+
+  persistData(
+    [...newActivities, ...activities],
+    [...newStoppages, ...stoppages],
+    logs
+  );
+
+  if (isSupabaseConfigured()) {
+
+    newActivities.forEach(
+      dbSaveActivity
+    );
+
+    newStoppages.forEach(
+      dbSaveStoppage
+    );
+
+  }
+
+};
+  
   // Stoppage Resolution
   const handleResolveStoppage = (stoppageId: string, notes?: string) => {
     const updatedStops = stoppages.map(stop => {
@@ -1467,6 +1613,8 @@ const handleDeleteStoppageType = async (
 
                   onAddActivity={handleAddActivity}
                   onAddStoppage={handleAddStoppage}
+
+                  onAddBatch={handleAddBatch}
                 />
               )}
               
