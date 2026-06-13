@@ -44,7 +44,7 @@ export default function AdminPanel({
   onUpdateStoppagesList,
   
   usersList,
-  onUpdateUsersList
+  onUpdateUsersList,
 
   onCreateUser,
   onUpdateUser,
@@ -180,7 +180,9 @@ const resetUserForm = () => {
   };
 
   // --- 4. Manage Users ---
-  const handleAddUser = (e: React.FormEvent) => {
+  const handleAddUser = async (
+    e: React.FormEvent
+  ) => {
     e.preventDefault();
     
     const name = newUserName.trim();
@@ -220,66 +222,83 @@ const resetUserForm = () => {
   role: newUserRole
 };
 
-if (editingUsername) {
+try {
 
-  const updated = usersList.map(user =>
-    user.username === editingUsername
-      ? newUser
-      : user
-  );
+  if (editingUsername) {
 
-  onUpdateUsersList(updated);
+    await onUpdateUser(newUser);
 
-  resetUserForm();
+    showNotification(
+      `Usuário "${name}" atualizado com sucesso!`
+    );
 
-  showNotification(
-    `Usuário "${name}" atualizado com sucesso!`
-  );
+  } else {
 
-} else {
+    await onCreateUser(newUser);
 
-  const updated = [...usersList, newUser];
-
-  onUpdateUsersList(updated);
+    showNotification(
+      `Usuário "${name}" cadastrado!`
+    );
+  }
 
   resetUserForm();
 
+} catch (error) {
+
+  console.error(error);
+
   showNotification(
-    `Usuário "${name}" cadastrado!`
+    'Erro ao salvar usuário.',
+    'error'
   );
 }
 
 };
 
-  const handleDeleteUser = (username: string) => {
-  const isProtected = [
-    'producao',
-    'lideranca',
-    'adm',
-    'visualizador'
-  ].includes(username.toLowerCase());
-
-  if (isProtected) {
-    showNotification(
-      'Os usuários padrão do sistema não podem ser excluídos.',
-      'error'
-    );
-    return;
-  }
-
-  if (confirm(`Excluir o usuário de acesso "${username}"?`)) {
-    const updated = usersList.filter(
-      u => u.username !== username
-    );
-
-    onUpdateUsersList(updated);
-
-    showNotification(
-      `Usuário "${username}" excluído.`
-    );
-  }
-};
-
+  const handleDeleteUser = async (
+    username: string
+  ) => {
+  
+    const isProtected = [
+      'producao',
+      'lideranca',
+      'adm',
+      'visualizador'
+    ].includes(username.toLowerCase());
+  
+    if (isProtected) {
+      showNotification(
+        'Os usuários padrão do sistema não podem ser excluídos.',
+        'error'
+      );
+      return;
+    }
+  
+    if (!confirm(
+      `Excluir o usuário de acesso "${username}"?`
+    )) {
+      return;
+    }
+  
+    try {
+  
+      await onDeleteUser(username);
+  
+      showNotification(
+        `Usuário "${username}" excluído.`
+      );
+  
+    } catch (error) {
+  
+      console.error(error);
+  
+      showNotification(
+        'Erro ao excluir usuário.',
+        'error'
+      );
+    }
+  };
+  
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm font-sans" id="admin-management-container">
       <div className="flex items-center space-x-2.5 border-b border-slate-100 pb-4 mb-6">
