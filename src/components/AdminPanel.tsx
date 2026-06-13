@@ -194,8 +194,11 @@ const resetUserForm = () => {
   };
 
   // --- 3. Manage Stoppages ---
-  const handleAddStoppage = (e: React.FormEvent) => {
+  const handleAddStoppage = async (
+      e: React.FormEvent
+    ) => {
     e.preventDefault();
+    
     const code = Number(newStoppageCode);
     const name = newStoppageName.trim();
 
@@ -212,18 +215,32 @@ const resetUserForm = () => {
       return;
     }
 
-    const updated = [...stoppagesList, { code, name }].sort((a, b) => a.code - b.code);
-    onUpdateStoppagesList(updated);
+    await onCreateStoppageType({
+        code,
+        name
+      });
+    
     setNewStoppageCode('');
     setNewStoppageName('');
+    
     showNotification(`Parada "${code} - ${name}" cadastrada!`);
   };
 
-  const handleDeleteStoppage = (code: number) => {
-    if (confirm(`Deseja remover a parada de código ${code}?`)) {
-      const updated = stoppagesList.filter(s => s.code !== code);
-      onUpdateStoppagesList(updated);
-      showNotification(`Parada ${code} removida.`);
+  const handleDeleteStoppage = async (
+    code: number
+  ) => {
+  
+    if (
+      confirm(
+        `Deseja remover a parada de código ${code}?`
+      )
+    ) {
+  
+      await onDeleteStoppageType(code);
+  
+      showNotification(
+        `Parada ${code} removida.`
+      );
     }
   };
 
