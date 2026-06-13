@@ -443,10 +443,12 @@ const handleDeleteStoppageType = async (
   });
 
   // Active Navigation Tab
-  // 'DASHBOARD' | 'ACTIVITIES' | 'STOPPAGES' | 'HISTORY'
+  // 'DASHBOARD' | 'PRODUCTION' | 'ACTIVITIES' | 'STOPPAGES' | 'HISTORY'
   const [activeTab, setActiveTab] = useState<string>(() => {
     const savedUser = localStorage.getItem('porto_session_user');
-    return savedUser === 'producao' ? 'ACTIVITIES' : 'DASHBOARD';
+    return savedUser === 'producao'
+      ? 'PRODUCTION'
+      : 'DASHBOARD';
   });
 
   // Real-time server/clock to display in the header
@@ -1222,37 +1224,21 @@ const handleDeleteStoppageType = async (
                  sessionUser === 'adm') && (
                 <>
                   <button
-                    onClick={() => setActiveTab('ACTIVITIES')}
-                    id="tab-activities"
+                    onClick={() => setActiveTab('PRODUCTION')}
+                    id="tab-production"
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left text-sm font-medium relative cursor-pointer ${
-                      activeTab === 'ACTIVITIES' 
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
+                      activeTab === 'PRODUCTION'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                         : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                     }`}
                   >
                     <ActivityIcon className="w-5 h-5 shrink-0" />
-                    <span>Atividades</span>
-                    {activeActivitiesCount > 0 && (
+                  
+                    <span>Produção</span>
+                  
+                    {(activeActivitiesCount + activeStoppagesCount) > 0 && (
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 bg-blue-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">
-                        {activeActivitiesCount}
-                      </span>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('STOPPAGES')}
-                    id="tab-stoppages"
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left text-sm font-medium relative cursor-pointer ${
-                      activeTab === 'STOPPAGES' 
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
-                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    <PowerOff className="w-5 h-5 shrink-0" />
-                    <span>Paradas</span>
-                    {activeStoppagesCount > 0 && (
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">
-                        {activeStoppagesCount}
+                        {activeActivitiesCount + activeStoppagesCount}
                       </span>
                     )}
                   </button>
@@ -1405,10 +1391,22 @@ const handleDeleteStoppageType = async (
 
             {activeTab !== 'DASHBOARD' && activeTab !== 'ACTIVITIES' && (
               <button
-                onClick={() => setActiveTab('ACTIVITIES')}
-                className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition cursor-pointer shadow-xs whitespace-nowrap"
+                onClick={() => setActiveTab('PRODUCTION')}
+                id="tab-production"
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left text-sm font-medium relative cursor-pointer ${
+                  activeTab === 'PRODUCTION'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                }`}
               >
-                + Novo Lançamento
+                <ActivityIcon className="w-5 h-5 shrink-0" />
+                <span>Produção</span>
+              
+                {(activeActivitiesCount + activeStoppagesCount) > 0 && (
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 bg-blue-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">
+                    {activeActivitiesCount + activeStoppagesCount}
+                  </span>
+                )}
               </button>
             )}
 
@@ -1435,6 +1433,24 @@ const handleDeleteStoppageType = async (
                   stoppages={stoppages} 
                   onQuickResolveStoppage={handleResolveStoppage}
                 />
+              )}
+
+              {activeTab === 'PRODUCTION' && (
+                <div className="bg-white rounded-xl border border-slate-200 p-8">
+                  <h2 className="text-xl font-bold text-slate-800 mb-4">
+                    Produção em Lote
+                  </h2>
+              
+                  <p className="text-slate-600">
+                    Tela em construção.
+                  </p>
+              
+                  <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700">
+                      Aqui será implementado o novo lançamento unificado de Atividades e Paradas.
+                    </p>
+                  </div>
+                </div>
               )}
               
               {activeTab === 'ACTIVITIES' && (
