@@ -77,6 +77,8 @@ export default function App() {
   const [logs, setLogs] = useState<ProductionLog[]>([]);
 
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+
+  const [editingStoppage, setEditingStoppage] = useState<Stoppage | null>(null);
   
   const [isInitializing, setIsInitializing] = useState(true);
 
@@ -837,8 +839,45 @@ export default function App() {
   setActiveTab('ACTIVITIES');
   };
 
+  const handleEditStoppage = (stoppage: Stoppage) => {
+  setEditingStoppage(stoppage);
+  setActiveTab('STOPPAGES');
+  };
+  
   const handleUpdateActivity = (updatedActivity: Activity) => {
 
+  const handleUpdateStoppage = (updatedStoppage: Stoppage) => {
+
+  const updatedStoppages = stoppages.map(stop =>
+    stop.id === updatedStoppage.id
+      ? updatedStoppage
+      : stop
+  );
+
+  const description =
+    `Edição manual da parada '${updatedStoppage.stoppageName}' do colaborador '${updatedStoppage.operator}'.`;
+
+  const newLog = createLog(
+    'PARADA_ATUALIZACAO',
+    description,
+    updatedStoppage.operator,
+    updatedStoppage.id
+  );
+
+  persistData(
+    activities,
+    updatedStoppages,
+    [newLog, ...logs]
+  );
+
+  if (isSupabaseConfigured()) {
+    dbSaveStoppage(updatedStoppage);
+    dbSaveLog(newLog);
+  }
+
+  setEditingStoppage(null);
+  };
+    
   const updatedActivities = activities.map(act =>
     act.id === updatedActivity.id
       ? updatedActivity
