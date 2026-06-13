@@ -215,7 +215,13 @@ const resetUserForm = () => {
       return;
     }
 
-    const newUser: CustomUser = {
+    const existingUser = usersList.find(
+  u => u.username === editingUsername
+);
+
+const newUser: CustomUser = {
+  id: existingUser?.id,
+
   username,
   name,
   password,
