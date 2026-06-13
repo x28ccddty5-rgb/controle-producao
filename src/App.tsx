@@ -1066,7 +1066,7 @@ export default function App() {
             
             {/* Sidebar Navigation links */}
             <nav className="space-y-1">
-              (sessionUser === 'lideranca' ||
+              {(sessionUser === 'lideranca' ||
                sessionUser === 'adm' ||
                sessionUser === 'visualizador') && (
                 <button
@@ -1136,7 +1136,7 @@ export default function App() {
                     <span>Histórico</span>
                   </button>
 
-                  {sessionUserName === 'adm' && (
+                  {(sessionUserName === 'adm' && (
                     <button
                       onClick={() => setActiveTab('ADMIN')}
                       id="tab-admin"
