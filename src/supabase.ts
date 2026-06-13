@@ -264,3 +264,75 @@ export async function dbClearLogs(): Promise<boolean> {
     return false;
   }
 }
+
+// =========================
+// USERS
+// =========================
+
+export async function dbFetchUsers() {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('name');
+
+    if (error) {
+      console.error(error);
+      return null;
+    }
+
+    return data;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+export async function dbSaveUser(user: any) {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('users')
+      .upsert({
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        password: user.password,
+        role: user.role
+      });
+
+    if (error) {
+      console.error(error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
+
+export async function dbDeleteUser(username: string) {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('username', username);
+
+    if (error) {
+      console.error(error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
