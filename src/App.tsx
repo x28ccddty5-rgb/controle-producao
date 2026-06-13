@@ -75,6 +75,9 @@ export default function App() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [stoppages, setStoppages] = useState<Stoppage[]>([]);
   const [logs, setLogs] = useState<ProductionLog[]>([]);
+
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  
   const [isInitializing, setIsInitializing] = useState(true);
 
   // Dynamic user list
@@ -829,6 +832,11 @@ export default function App() {
     }
   };
 
+  const handleEditActivity = (activity: Activity) => {
+  setEditingActivity(activity);
+  setActiveTab('ACTIVITIES');
+  };
+  
   // Calculated Active Stoppages Count for Badges
   const activeStoppagesCount = useMemo(() => {
     return stoppages.filter(s => s.status === 'ATIVA').length;
@@ -1211,6 +1219,9 @@ export default function App() {
                   onDeleteActivity={handleDeleteActivity}
                   collaboratorsList={collaborators}
                   activitiesList={activitiesList}
+                
+                  editingActivity={editingActivity}
+                  setEditingActivity={setEditingActivity}
                 />
               )}
 
