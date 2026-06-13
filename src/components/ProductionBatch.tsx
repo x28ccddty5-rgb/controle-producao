@@ -123,8 +123,18 @@ export default function ProductionBatch({
   const handleSubmitBatch = async () => {
 
   try {
-
-    rows.forEach(row => {
+  
+    if (!productionDate) {
+    alert('Informe a data da produção.');
+    return;
+  }
+  
+  if (!selectedCollaborator) {
+    alert('Selecione um colaborador.');
+    return;
+  }
+    
+    for (const row of rows) {
 
       if (row.type === 'ATIVIDADE') {
 
@@ -206,8 +216,30 @@ export default function ProductionBatch({
 
       }
 
-    });
+    }
 
+    setRows([
+  {
+    id: crypto.randomUUID(),
+    type: 'ATIVIDADE',
+    code: '',
+    local: '',
+    listId: '',
+    startTime: '',
+    endTime: '',
+    palletJackId: '',
+    forkliftId: '',
+    producedQuantity: 0,
+    itemsQuantity: 0,
+    notes: ''
+  }
+]);
+
+setProductionDate('');
+setSelectedCollaborator('');
+    
+alert('Lote lançado com sucesso.');
+    
   } catch (error) {
 
     console.error(
