@@ -989,7 +989,20 @@ const handleDeleteStoppageType = async (
       };
 
       const id = crypto.randomUUID();
-
+  
+        const [sh, sm] =
+        row.startTime.split(':').map(Number);
+      
+      const [eh, em] =
+        row.endTime.split(':').map(Number);
+      
+      const totalMinutes =
+        (eh * 60 + em) -
+        (sh * 60 + sm);
+      
+      const duration =
+        `${String(Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
+            
       const stoppage: Stoppage = {
         id,
         date: productionDate,
@@ -1004,8 +1017,8 @@ const handleDeleteStoppageType = async (
         startTime: row.startTime,
         endTime: row.endTime,
 
-        duration: '00:15',
-        durationMinutes: 15,
+        duration,
+        durationMinutes: totalMinutes,
 
         status: 'RESOLVIDA',
 
