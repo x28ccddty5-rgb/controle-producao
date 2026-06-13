@@ -1304,25 +1304,35 @@ export default function App() {
               {activeTab === 'STOPPAGES' && (
                 <StoppageManagement 
                   stoppages={stoppages}
+              
                   onAddStoppage={handleAddStoppage}
+                  onUpdateStoppage={handleUpdateStoppage}
+              
                   onResolveStoppage={handleResolveStoppage}
+              
                   isAdmin={isSupervisorLoggedIn}
+              
                   onDeleteStoppage={handleDeleteStoppage}
+              
                   collaboratorsList={collaborators}
                   stoppagesList={stoppagesList}
+              
+                  editingStoppage={editingStoppage}
+                  setEditingStoppage={setEditingStoppage}
                 />
               )}
 
               {activeTab === 'HISTORY' && (
-                <HistoryLogs 
+                <HistoryLogs
                   activities={activities}
                   stoppages={stoppages}
-                  onClearLogs={() => persistData(activities, stoppages, [])}
-                  
+                
                   onDeleteActivity={handleDeleteActivity}
                   onEditActivity={handleEditActivity}
                 
                   onDeleteStoppage={handleDeleteStoppage}
+                  onEditStoppage={handleEditStoppage}
+                
                   isAdmin={isSupervisorLoggedIn}
                 />
               )}
