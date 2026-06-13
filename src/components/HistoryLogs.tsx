@@ -448,19 +448,34 @@ export default function HistoryLogs({
                         <td className="py-3 px-4 text-slate-500 font-mono whitespace-nowrap">{stop.createdAt || '-'}</td>
                         {isAdmin && (
                           <td className="py-2 px-4 text-center">
-                            <button
-                              onClick={() => {
-                                if (window.confirm('Excluir este registro permanentemente de Paradas?')) {
-                                  onDeleteStoppage?.(stop.id);
-                                }
-                              }}
-                              className="p-1 text-red-500 hover:bg-rose-50 rounded-md hover:text-red-700 transition cursor-pointer inline-flex items-center justify-center"
-                              title="Excluir Registro"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                        
+                            <div className="flex items-center justify-center gap-2">
+                        
+                              <button
+                                onClick={() => onEditStoppage?.(stop)}
+                                className="p-1 text-blue-500 hover:bg-blue-50 rounded-md hover:text-blue-700 transition cursor-pointer inline-flex items-center justify-center"
+                                title="Editar Registro"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                        
+                              <button
+                                onClick={() => {
+                                  if (window.confirm('Excluir este registro permanentemente de Paradas?')) {
+                                    onDeleteStoppage?.(stop.id);
+                                  }
+                                }}
+                                className="p-1 text-red-500 hover:bg-rose-50 rounded-md hover:text-red-700 transition cursor-pointer inline-flex items-center justify-center"
+                                title="Excluir Registro"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                        
+                            </div>
+                        
                           </td>
                         )}
+                        
                       </tr>
                     ))}
                   </tbody>
