@@ -133,8 +133,9 @@ export default function ProductionBatch({
     );
 
   onAddActivity({
+    isRetroactive: true,
+    
     date: productionDate,
-
     operator: selectedCollaborator,
 
     activityCode: Number(row.code),
@@ -174,8 +175,9 @@ export default function ProductionBatch({
     );
 
   onAddStoppage({
+    isRetroactive: true,
+    
     date: productionDate,
-
     operator: selectedCollaborator,
 
     stoppageCode: Number(row.code),
