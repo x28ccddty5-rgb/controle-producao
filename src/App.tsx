@@ -1437,7 +1437,7 @@ const handleDeleteStoppageType = async (
               )}
 
               {activeTab === 'PRODUCTION' && (
-                <ProductionBatch />
+                <ProductionBatch
                   collaborators={collaborators}
                   activitiesList={activitiesList}
                   stoppagesList={stoppagesList}
