@@ -27,17 +27,28 @@ interface AdminPanelProps {
   onUpdateStoppagesList: (newList: { code: number; name: string }[]) => void;
   usersList: CustomUser[];
   onUpdateUsersList: (newList: CustomUser[]) => void;
+
+  onCreateUser: (user: CustomUser) => Promise<void>;
+  onUpdateUser: (user: CustomUser) => Promise<void>;
+  onDeleteUser: (username: string) => Promise<void>;
 }
 
 export default function AdminPanel({
   collaborators,
   onUpdateCollaborators,
+  
   activitiesList,
   onUpdateActivitiesList,
+  
   stoppagesList,
   onUpdateStoppagesList,
+  
   usersList,
   onUpdateUsersList
+
+  onCreateUser,
+  onUpdateUser,
+  onDeleteUser
 }: AdminPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<'collab' | 'activity' | 'stoppage' | 'users'>('collab');
 
