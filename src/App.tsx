@@ -52,8 +52,8 @@ const STORAGE_KEYS = {
 
 const DEFAULT_USERS: CustomUser[] = [
   { username: 'producao', name: 'Sara', password: '1234', role: 'producao' },
-  { username: 'lideranca', name: 'Jonas', password: 'ADM2026', role: 'supervisor' },
-  { username: 'adm', name: 'Matheus', password: 'math2308', role: 'supervisor' },
+  { username: 'lideranca', name: 'Jonas', password: 'ADM2026', role: 'lideranca' },
+  { username: 'adm', name: 'Matheus', password: 'math2308', role: 'adm' },
   { username: 'visualizador', name: 'Visualizador', password: '2026', role: 'visualizador' }
 ];
 
@@ -206,7 +206,7 @@ export default function App() {
   const [registerName, setRegisterName] = useState<string>('');
   const [registerUsername, setRegisterUsername] = useState<string>('');
   const [registerPassword, setRegisterPassword] = useState<string>('');
-  const [registerRole, setRegisterRole] = useState<'producao' | 'supervisor'>('producao');
+  const [registerRole, setRegisterRole] = useState<'producao' | 'adm'>('producao');
   const [registerSuccess, setRegisterSuccess] = useState<string>('');
   const [showCredentialsHelp, setShowCredentialsHelp] = useState<boolean>(false);
 
@@ -788,7 +788,7 @@ export default function App() {
   const handleResetToDemo = () => {
     if (confirm('Deseja restaurar os dados originais da planilha de Porto Brasil?')) {
       persistData(INITIAL_ACTIVITIES, INITIAL_STOPPAGES, INITIAL_LOGS);
-      const defaultTab = sessionUser === 'supervisor' ? 'DASHBOARD' : 'ACTIVITIES';
+      const defaultTab = sessionUser === 'adm' ? 'DASHBOARD' : 'ACTIVITIES';
       setActiveTab(defaultTab);
       if (isSupabaseConfigured()) {
         import('./supabase').then(({ supabase: sb }) => {
@@ -805,7 +805,7 @@ export default function App() {
   const handleWipeData = () => {
     if (confirm('ATENÇÃO: Deseja esvaziar permanentemente todos os registros deste terminal?')) {
       persistData([], [], []);
-      const defaultTab = sessionUser === 'supervisor' ? 'DASHBOARD' : 'ACTIVITIES';
+      const defaultTab = sessionUser === 'adm' ? 'DASHBOARD' : 'ACTIVITIES';
       setActiveTab(defaultTab);
       if (isSupabaseConfigured()) {
         import('./supabase').then(({ supabase: sb }) => {
@@ -1042,7 +1042,7 @@ export default function App() {
     );
   }
 
-  const isSupervisorLoggedIn = 
+  const isAdmLoggedIn = 
     sessionUser === 'lideranca' ||
     sessionUser === 'adm';
 
@@ -1136,7 +1136,7 @@ export default function App() {
                     <span>Histórico</span>
                   </button>
 
-                  (sessionUserName === 'adm' && (
+                  {sessionUser === 'adm' && (
                     <button
                       onClick={() => setActiveTab('ADMIN')}
                       id="tab-admin"
@@ -1187,14 +1187,14 @@ export default function App() {
           <div className="mt-auto border-t border-slate-800 pt-5 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-slate-750 flex items-center justify-center text-xs font-bold text-blue-400 select-none shrink-0 border border-slate-700 uppercase font-mono">
-                {sessionUser === 'supervisor' ? 'SU' : 'PR'}
+                {sessionUser === 'adm' ? 'SU' : 'PR'}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-white text-sm font-semibold truncate">
-                  {sessionUser === 'supervisor' ? 'Supervisor Turno' : 'Operação Produção'}
+                  {sessionUser === 'adm' ? 'ADM' : 'Operação Produção'}
                 </p>
                 <p className="text-slate-500 text-[10px] uppercase font-mono tracking-wider truncate">
-                  {sessionUser === 'supervisor' ? 'Nível Gestão' : 'Acesso Operador'}
+                  {sessionUser === 'adm' ? 'Nível Gestão' : 'Acesso Operador'}
                 </p>
               </div>
             </div>
@@ -1314,7 +1314,7 @@ export default function App() {
               
                 activeStagedOperators={stoppages.filter(s => s.status === 'ATIVA').map(s => s.operator)}
               
-                isAdmin={isSupervisorLoggedIn}
+                isAdmin={isAdmLoggedIn}
                 onDeleteActivity={handleDeleteActivity}
               
                 collaboratorsList={collaborators}
@@ -1334,7 +1334,7 @@ export default function App() {
               
                   onResolveStoppage={handleResolveStoppage}
               
-                  isAdmin={isSupervisorLoggedIn}
+                  isAdmin={isAdmLoggedIn}
               
                   onDeleteStoppage={handleDeleteStoppage}
               
@@ -1357,7 +1357,7 @@ export default function App() {
                   onDeleteStoppage={handleDeleteStoppage}
                   onEditStoppage={handleEditStoppage}
                 
-                  isAdmin={isSupervisorLoggedIn}
+                  isAdmin={isAdmLoggedIn}
                 />
               )}
 
@@ -1399,7 +1399,7 @@ export default function App() {
             <span>Produtividade • Separação • Armazenamento • Paradas de Mão de Obra</span>
           </div>
           <div className="font-mono text-[9px] uppercase tracking-wider font-bold">
-            PORTO-LOG v1.2.0 • {isSupervisorLoggedIn ? 'MODO SUPERVISÃO' : 'MODO OPERADOR'}
+            PORTO-LOG v1.2.0 • {isAdmLoggedIn ? 'MODO SUPERVISÃO' : 'MODO OPERADOR'}
           </div>
         </footer>
       </main>
