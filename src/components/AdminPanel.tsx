@@ -599,7 +599,7 @@ if (editingUsername) {
                     className="w-full bg-white border border-slate-205 rounded-xl px-4 py-2 text-slate-705 cursor-pointer outline-hidden"
                   >
                     <option value="producao">Sara - Produção (Lança tarefas / paradas / vê histórico)</option>
-                    <option value="adm">lideranca / Gerência (Pode apagar dados / ver dashboard)</option>
+                    <option value="lideranca">lideranca / Gerência (Pode apagar dados / ver dashboard)</option>
                     <option value="adm">adm / Gerência (Pode apagar dados / ver dashboard)</option>
                     <option value="visualizador">Somente Dashboard (Não acessa outras guias)</option>
                   </select>
