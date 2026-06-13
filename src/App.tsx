@@ -508,6 +508,10 @@ const handleDeleteStoppageType = async (
             await dbFetchActivityTypes();
           const stoppageTypes =
             await dbFetchStoppageTypes();
+
+          console.log('ACTIVITY TYPES:', activityTypes);
+          console.log('STOPPAGE TYPES:', stoppageTypes);
+          
           const pLogs = await dbFetchLogs();
           
           if (acts !== null && stops !== null && pLogs !== null) {
