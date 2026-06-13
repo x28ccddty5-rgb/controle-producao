@@ -1242,9 +1242,12 @@ export default function App() {
                   activities={activities}
                   stoppages={stoppages}
                   onClearLogs={() => persistData(activities, stoppages, [])}
-                  isAdmin={isSupervisorLoggedIn}
+                  
                   onDeleteActivity={handleDeleteActivity}
+                  onEditActivity={handleEditActivity}
+                
                   onDeleteStoppage={handleDeleteStoppage}
+                  isAdmin={isSupervisorLoggedIn}
                 />
               )}
 
