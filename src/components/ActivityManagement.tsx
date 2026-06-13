@@ -86,6 +86,41 @@ export default function ActivityManagement({
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState('');
 
+  useEffect(() => {
+
+  if (!editingActivity) return;
+
+  setProdDate(
+    editingActivity.date.split('/').reverse().join('-')
+  );
+
+  setOperator(editingActivity.operator);
+
+  setActivityCode(editingActivity.activityCode);
+
+  setLocal(editingActivity.local);
+
+  setListId(editingActivity.listId);
+
+  setStartTime(editingActivity.startTime);
+
+  setEndTime(editingActivity.endTime || '');
+
+  setPalletJackId(editingActivity.palletJackId);
+
+  setForkliftId(editingActivity.forkliftId);
+
+  setProducedQuantity(editingActivity.producedQuantity);
+
+  setItemsQuantity(editingActivity.itemsQuantity);
+
+  setNotes(editingActivity.notes || '');
+
+  setIsFormOpen(true);
+
+}, [editingActivity]);
+  
+
   const handleCalculateDuration = (start: string, end: string) => {
     try {
       const startParts = start.split(':').map(Number);
