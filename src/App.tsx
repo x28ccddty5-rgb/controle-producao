@@ -1136,7 +1136,7 @@ export default function App() {
                     <span>Histórico</span>
                   </button>
 
-                  {(sessionUserName === 'adm' && (
+                  (sessionUserName === 'adm' && (
                     <button
                       onClick={() => setActiveTab('ADMIN')}
                       id="tab-admin"
