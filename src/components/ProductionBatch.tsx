@@ -227,8 +227,12 @@ export default function ProductionBatch({
                   </td>
             
                   <td className="p-2">
-                    <input
-                      className="border rounded px-2 py-1 w-full"
+                   <input
+                      className={`border rounded px-2 py-1 w-full ${
+                        row.type === 'PARADA'
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : ''
+                      }`}
                       value={row.local}
                       disabled={row.type === 'PARADA'}
                     />
@@ -236,7 +240,11 @@ export default function ProductionBatch({
             
                   <td className="p-2">
                     <input
-                      className="border rounded px-2 py-1 w-full"
+                      className={`border rounded px-2 py-1 w-full ${
+                        row.type === 'PARADA'
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : ''
+                      }`}
                       value={row.listId}
                       disabled={row.type === 'PARADA'}
                     />
@@ -260,7 +268,11 @@ export default function ProductionBatch({
             
                   <td className="p-2">
                     <input
-                      className="border rounded px-2 py-1 w-full"
+                      className={`border rounded px-2 py-1 w-full ${
+                        row.type === 'PARADA'
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : ''
+                      }`}
                       value={row.palletJackId}
                       disabled={row.type === 'PARADA'}
                     />
@@ -268,7 +280,11 @@ export default function ProductionBatch({
             
                   <td className="p-2">
                     <input
-                      className="border rounded px-2 py-1 w-full"
+                      className={`border rounded px-2 py-1 w-full ${
+                        row.type === 'PARADA'
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : ''
+                      }`}
                       value={row.forkliftId}
                       disabled={row.type === 'PARADA'}
                     />
@@ -276,8 +292,11 @@ export default function ProductionBatch({
             
                   <td className="p-2">
                     <input
-                      type="number"
-                      className="border rounded px-2 py-1 w-full"
+                      className={`border rounded px-2 py-1 w-full ${
+                        row.type === 'PARADA'
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : ''
+                      }`}
                       value={row.producedQuantity}
                       disabled={row.type === 'PARADA'}
                     />
@@ -285,8 +304,11 @@ export default function ProductionBatch({
             
                   <td className="p-2">
                     <input
-                      type="number"
-                      className="border rounded px-2 py-1 w-full"
+                      className={`border rounded px-2 py-1 w-full ${
+                        row.type === 'PARADA'
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : ''
+                      }`}
                       value={row.itemsQuantity}
                       disabled={row.type === 'PARADA'}
                     />
