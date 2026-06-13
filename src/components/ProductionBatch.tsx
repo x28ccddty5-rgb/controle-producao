@@ -189,11 +189,23 @@ export default function ProductionBatch({
                     <select
                       className="border rounded px-2 py-1 w-full"
                       value={row.code}
+                      onChange={(e) =>
+                        setRows(prev =>
+                          prev.map(r =>
+                            r.id === row.id
+                              ? {
+                                  ...r,
+                                  code: e.target.value
+                                }
+                              : r
+                          )
+                        )
+                      }
                     >
                       <option value="">
                         Selecione...
                       </option>
-            
+                  
                       {row.type === 'ATIVIDADE'
                         ? activitiesList.map(activity => (
                             <option
@@ -218,6 +230,7 @@ export default function ProductionBatch({
                     <input
                       className="border rounded px-2 py-1 w-full"
                       value={row.local}
+                      disabled={row.type === 'PARADA'}
                     />
                   </td>
             
@@ -225,6 +238,7 @@ export default function ProductionBatch({
                     <input
                       className="border rounded px-2 py-1 w-full"
                       value={row.listId}
+                      disabled={row.type === 'PARADA'}
                     />
                   </td>
             
@@ -248,6 +262,7 @@ export default function ProductionBatch({
                     <input
                       className="border rounded px-2 py-1 w-full"
                       value={row.palletJackId}
+                      disabled={row.type === 'PARADA'}
                     />
                   </td>
             
@@ -255,6 +270,7 @@ export default function ProductionBatch({
                     <input
                       className="border rounded px-2 py-1 w-full"
                       value={row.forkliftId}
+                      disabled={row.type === 'PARADA'}
                     />
                   </td>
             
@@ -263,6 +279,7 @@ export default function ProductionBatch({
                       type="number"
                       className="border rounded px-2 py-1 w-full"
                       value={row.producedQuantity}
+                      disabled={row.type === 'PARADA'}
                     />
                   </td>
             
@@ -271,6 +288,7 @@ export default function ProductionBatch({
                       type="number"
                       className="border rounded px-2 py-1 w-full"
                       value={row.itemsQuantity}
+                      disabled={row.type === 'PARADA'}
                     />
                   </td>
             
