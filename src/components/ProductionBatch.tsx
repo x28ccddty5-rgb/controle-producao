@@ -13,9 +13,9 @@ interface ProductionBatchProps {
     name: string;
   }[];
 
-  onAddActivity: any;
+  onAddActivity: (activity: any) => void;
 
-  onAddStoppage: any;
+  onAddStoppage: (stoppage: any) => void;
 }
 
 interface BatchRow {
@@ -124,21 +124,73 @@ export default function ProductionBatch({
 
   rows.forEach(row => {
 
-    if (row.type === 'ATIVIDADE') {
+   if (row.type === 'ATIVIDADE') {
 
-      console.log('ATIVIDADE');
+  const selectedActivity =
+    activitiesList.find(
+      activity =>
+        String(activity.code) === row.code
+    );
 
-      console.log(row);
+  onAddActivity({
+    date: productionDate,
 
-    }
+    operator: selectedCollaborator,
+
+    activityCode: Number(row.code),
+
+    activityName:
+      selectedActivity?.label || '',
+
+    local: row.local,
+
+    listId: row.listId,
+
+    startTime: row.startTime,
+
+    endTime: row.endTime,
+
+    palletJackId: row.palletJackId,
+
+    forkliftId: row.forkliftId,
+
+    producedQuantity:
+      row.producedQuantity,
+
+    itemsQuantity:
+      row.itemsQuantity,
+
+    notes: row.notes
+  });
+
+}
 
     if (row.type === 'PARADA') {
 
-      console.log('PARADA');
+  const selectedStoppage =
+    stoppagesList.find(
+      stoppage =>
+        String(stoppage.code) === row.code
+    );
 
-      console.log(row);
+  onAddStoppage({
+    date: productionDate,
 
-    }
+    operator: selectedCollaborator,
+
+    stoppageCode: Number(row.code),
+
+    stoppageName:
+      selectedStoppage?.name || '',
+
+    startTime: row.startTime,
+
+    endTime: row.endTime,
+
+    notes: row.notes
+  });
+
+}
 
   });
 
