@@ -1,6 +1,25 @@
 import React from 'react';
 
-export default function ProductionBatch() {
+interface ProductionBatchProps {
+  collaborators: string[];
+
+  activitiesList: {
+    code: number;
+    label: string;
+  }[];
+
+  stoppagesList: {
+    code: number;
+    name: string;
+  }[];
+}
+
+export default function ProductionBatch({
+  collaborators,
+  activitiesList,
+  stoppagesList
+}: ProductionBatchProps) {
+  
   return (
     <div className="space-y-6">
 
