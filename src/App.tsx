@@ -188,8 +188,8 @@ export default function App() {
   });
 
   // Application Authentication Sessions (3 roles: producao / supervisor / visualizador)
-  const [sessionUser, setSessionUser] = useState<'producao' | 'supervisor' | 'visualizador' | null>(() => {
-    return (localStorage.getItem('porto_session_user') as 'producao' | 'supervisor' | 'visualizador') || null;
+  const [sessionUser, setSessionUser] = useState<'producao' | 'visualizador' | 'lideranca' | 'adm' |null>(() => {
+    return (localStorage.getItem('porto_session_user') as 'producao' | 'visualizador' | 'lideranca' | 'adm') || null;
   });
 
   const [sessionUserName, setSessionUserName] = useState<string>(() => {
@@ -1042,7 +1042,7 @@ export default function App() {
     );
   }
 
-  const isSupervisorLoggedIn = sessionUser === 'supervisor';
+  const isSupervisorLoggedIn = sessionUser === 'adm';
 
   return (
     <div className="flex h-screen w-screen bg-slate-50 font-sans overflow-hidden" id="main-application-panel">
@@ -1130,7 +1130,7 @@ export default function App() {
                     <span>Histórico</span>
                   </button>
 
-                  {sessionUserName === 'Matheus' && (
+                  {sessionUserName === 'adm' && (
                     <button
                       onClick={() => setActiveTab('ADMIN')}
                       id="tab-admin"
