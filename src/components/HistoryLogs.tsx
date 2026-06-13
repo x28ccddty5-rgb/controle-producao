@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Activity, Stoppage } from '../types';
-import { Download, Search, FileSpreadsheet, Layers, PowerOff, Filter, Calendar, Trash2 } from 'lucide-react';
+import { Download, Search, FileSpreadsheet, Layers, PowerOff, Filter, Calendar, Trash2, Pencil } from 'lucide-react';
 //import { motion } from 'motion/react';
 
 interface HistoryLogsProps {
@@ -359,17 +359,30 @@ export default function HistoryLogs({
                         <td className="py-3 px-4 text-slate-500 font-mono whitespace-nowrap">{act.createdAt || '-'}</td>
                         {isAdmin && (
                           <td className="py-2 px-4 text-center">
-                            <button
-                              onClick={() => {
-                                if (window.confirm('Excluir este registro permanentemente de Atividades?')) {
-                                  onDeleteActivity?.(act.id);
-                                }
-                              }}
-                              className="p-1 text-red-500 hover:bg-rose-50 rounded-md hover:text-red-700 transition cursor-pointer inline-flex items-center justify-center"
-                              title="Excluir Registro"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                        
+                            <div className="flex items-center justify-center gap-2">
+                        
+                              <button
+                                onClick={() => onEditActivity?.(act)}
+                                className="p-1 text-blue-500 hover:bg-blue-50 rounded-md hover:text-blue-700 transition cursor-pointer inline-flex items-center justify-center"
+                                title="Editar Registro"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                        
+                              <button
+                                onClick={() => {
+                                  if (window.confirm('Excluir este registro permanentemente de Atividades?')) {
+                                    onDeleteActivity?.(act.id);
+                                  }
+                                }}
+                                className="p-1 text-red-500 hover:bg-rose-50 rounded-md hover:text-red-700 transition cursor-pointer inline-flex items-center justify-center"
+                                title="Excluir Registro"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                        
+                            </div>
                           </td>
                         )}
                       </tr>
