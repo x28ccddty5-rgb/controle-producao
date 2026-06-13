@@ -467,9 +467,6 @@ const handleDeleteStoppageType = async (
             await dbFetchActivityTypes();
           const stoppageTypes =
             await dbFetchStoppageTypes();
-
-          console.log('ACTIVITY TYPES:', activityTypes);
-          console.log('STOPPAGE TYPES:', stoppageTypes);
           
           const pLogs = await dbFetchLogs();
           
@@ -698,11 +695,6 @@ const handleDeleteStoppageType = async (
 
     const description = `Instanciada atividade de '${newActivity.activityName}' para o colaborador '${newActivity.operator}' no Local '${newActivity.local}', Lista ${newActivity.listId || 'N/A'}.`;
     const newLog = createLog('ATIVIDADE_INICIO', description, newActivity.operator, newId);
-
-    console.log(
-    'ATIVIDADES ANTES',
-    activities.length
-  );
     
     persistData(
     [newActivity, ...activities],
@@ -891,11 +883,6 @@ const handleDeleteStoppageType = async (
       }
       return act;
     });
-
-      console.log(
-      'PARADAS ANTES',
-      stoppages.length
-    );
     
     persistData(updatedActs, [newStoppage, ...stoppages.filter(s => s.id !== newId)], [newLog, ...logs]);
 
