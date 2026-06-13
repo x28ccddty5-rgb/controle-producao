@@ -53,6 +53,12 @@ export default function ProductionBatch({
   onAddStoppage
 }: ProductionBatchProps) {
 
+  const [productionDate, setProductionDate] =
+  React.useState('');
+
+  const [selectedCollaborator, setSelectedCollaborator] =
+  React.useState('');
+  
   const [rows, setRows] = React.useState<BatchRow[]>([
   {
     id: crypto.randomUUID(),
@@ -126,32 +132,34 @@ export default function ProductionBatch({
     <div className="space-y-6">
 
       <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-6">
 
             <h2 className="text-xl font-bold text-slate-800">
               Produção em Lote
             </h2>
           
-            <button
-              onClick={handleSubmitBatch}
-              className="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
-            >
-              Lançar Lote Completo
-            </button>
-                      
+            <div className="flex items-center gap-4">
+          
+              <div className="text-sm text-slate-600">
+                Horas Produção:
+          
+                <span className="font-bold ml-2">
+                  {(calculateActivityHours() / 60).toFixed(2)}h
+                </span>
+              </div>
+          
+              <button
+                onClick={handleSubmitBatch}
+                className="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+              >
+                Lançar Lote Completo
+              </button>
+          
+            </div>
+          
           </div>
 
-        <div className="grid grid-cols-2 gap-4">
-
-          <div className="mt-4 text-sm text-slate-600">
-
-              Horas de produção calculadas:
-            
-              <span className="font-bold ml-2">
-                {(calculateActivityHours() / 60).toFixed(2)}h
-              </span>
-            
-            </div>
+        <div className="grid grid-cols-2 gap-6 items-end">
           
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -161,6 +169,10 @@ export default function ProductionBatch({
             <input
               type="date"
               className="w-full border border-slate-300 rounded-lg px-3 py-2"
+              value={productionDate}
+              onChange={(e) =>
+                setProductionDate(e.target.value)
+              }
             />
           </div>
 
@@ -171,6 +183,10 @@ export default function ProductionBatch({
 
             <select
               className="w-full border border-slate-300 rounded-lg px-3 py-2"
+              value={selectedCollaborator}
+              onChange={(e) =>
+                setSelectedCollaborator(e.target.value)
+              }
             >
               <option value="">
                 Selecione...
