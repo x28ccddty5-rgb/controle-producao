@@ -1239,8 +1239,9 @@ export default function App() {
                   onQuickResolveStoppage={handleResolveStoppage}
                 />
               )}
-
-              <ActivityManagement 
+              
+              {activeTab === 'ACTIVITIES' && (
+                <ActivityManagement 
                 activities={activities}
                 onAddActivity={handleAddActivity}
                 onUpdateActivity={handleUpdateActivity}
