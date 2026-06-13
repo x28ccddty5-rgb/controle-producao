@@ -143,8 +143,11 @@ const resetUserForm = () => {
   };
 
   // --- 2. Manage Activities ---
-  const handleAddActivity = (e: React.FormEvent) => {
+  const handleAddActivity = async (
+      e: React.FormEvent
+    ) => {
     e.preventDefault();
+    
     const code = Number(newActivityCode);
     const label = newActivityLabel.trim();
 
@@ -161,18 +164,32 @@ const resetUserForm = () => {
       return;
     }
 
-    const updated = [...activitiesList, { code, label }].sort((a, b) => a.code - b.code);
-    onUpdateActivitiesList(updated);
+       await onCreateActivityType({
+      code,
+      label
+    });
+    
     setNewActivityCode('');
     setNewActivityLabel('');
+    
     showNotification(`Atividade "${code} - ${label}" cadastrada com sucesso!`);
   };
 
-  const handleDeleteActivity = (code: number) => {
-    if (confirm(`Deseja remover a atividade de código ${code}?`)) {
-      const updated = activitiesList.filter(a => a.code !== code);
-      onUpdateActivitiesList(updated);
-      showNotification(`Atividade ${code} removida.`);
+    const handleDeleteActivity = async (
+    code: number
+  ) => {
+  
+    if (
+      confirm(
+        `Deseja remover a atividade de código ${code}?`
+      )
+    ) {
+  
+      await onDeleteActivityType(code);
+  
+      showNotification(
+        `Atividade ${code} removida.`
+      );
     }
   };
 
