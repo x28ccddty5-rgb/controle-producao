@@ -38,6 +38,7 @@ import ActivityManagement from './components/ActivityManagement';
 import StoppageManagement from './components/StoppageManagement';
 import HistoryLogs from './components/HistoryLogs';
 import AdminPanel from './components/AdminPanel';
+import ProductionBatch from './components/ProductionBatch';
 import { 
   Gauge, 
   Activity as ActivityIcon, 
@@ -1436,21 +1437,7 @@ const handleDeleteStoppageType = async (
               )}
 
               {activeTab === 'PRODUCTION' && (
-                <div className="bg-white rounded-xl border border-slate-200 p-8">
-                  <h2 className="text-xl font-bold text-slate-800 mb-4">
-                    Produção em Lote
-                  </h2>
-              
-                  <p className="text-slate-600">
-                    Tela em construção.
-                  </p>
-              
-                  <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm text-blue-700">
-                      Aqui será implementado o novo lançamento unificado de Atividades e Paradas.
-                    </p>
-                  </div>
-                </div>
+                <ProductionBatch />
               )}
               
               {activeTab === 'ACTIVITIES' && (
