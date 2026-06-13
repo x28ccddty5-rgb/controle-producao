@@ -49,10 +49,20 @@ export interface ProductionLog {
 }
 
 export interface CustomUser {
-  username: string; // login identifier e.g. 'sara'
-  name: string;     // display name e.g. 'Sara'
-  password: string; // user chosen password
-  role: 'producao' | 'supervisor' | 'visualizador';
+  id?: string;
+
+  username: string;
+  name: string;
+  password: string;
+
+  role:
+    | 'admin'
+    | 'supervisor'
+    | 'producao'
+    | 'visualizador';
+
+  created_at?: string;
+  updated_at?: string;
 }
 
 
