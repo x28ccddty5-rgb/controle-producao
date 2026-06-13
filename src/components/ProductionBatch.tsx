@@ -120,81 +120,102 @@ export default function ProductionBatch({
   return totalMinutes;
 };
 
-  const handleSubmitBatch = () => {
+  const handleSubmitBatch = async () => {
 
-  rows.forEach(row => {
+  try {
 
-   if (row.type === 'ATIVIDADE') {
+    rows.forEach(row => {
 
-  const selectedActivity =
-    activitiesList.find(
-      activity =>
-        String(activity.code) === row.code
+      if (row.type === 'ATIVIDADE') {
+
+        const selectedActivity =
+          activitiesList.find(
+            activity =>
+              String(activity.code) === row.code
+          );
+
+        console.log(
+          'SALVANDO ATIVIDADE',
+          row
+        );
+
+        onAddActivity({
+          isRetroactive: true,
+
+          date: productionDate,
+          operator: selectedCollaborator,
+
+          activityCode: Number(row.code),
+
+          activityName:
+            selectedActivity?.label || '',
+
+          local: row.local,
+
+          listId: row.listId,
+
+          startTime: row.startTime,
+
+          endTime: row.endTime,
+
+          palletJackId: row.palletJackId,
+
+          forkliftId: row.forkliftId,
+
+          producedQuantity:
+            row.producedQuantity,
+
+          itemsQuantity:
+            row.itemsQuantity,
+
+          notes: row.notes
+        });
+
+      }
+
+      if (row.type === 'PARADA') {
+
+        const selectedStoppage =
+          stoppagesList.find(
+            stoppage =>
+              String(stoppage.code) === row.code
+          );
+
+        console.log(
+          'SALVANDO PARADA',
+          row
+        );
+
+        onAddStoppage({
+          isRetroactive: true,
+
+          date: productionDate,
+          operator: selectedCollaborator,
+
+          stoppageCode: Number(row.code),
+
+          stoppageName:
+            selectedStoppage?.name || '',
+
+          startTime: row.startTime,
+
+          endTime: row.endTime,
+
+          notes: row.notes
+        });
+
+      }
+
+    });
+
+  } catch (error) {
+
+    console.error(
+      'ERRO LOTE:',
+      error
     );
 
-  onAddActivity({
-    isRetroactive: true,
-    
-    date: productionDate,
-    operator: selectedCollaborator,
-
-    activityCode: Number(row.code),
-
-    activityName:
-      selectedActivity?.label || '',
-
-    local: row.local,
-
-    listId: row.listId,
-
-    startTime: row.startTime,
-
-    endTime: row.endTime,
-
-    palletJackId: row.palletJackId,
-
-    forkliftId: row.forkliftId,
-
-    producedQuantity:
-      row.producedQuantity,
-
-    itemsQuantity:
-      row.itemsQuantity,
-
-    notes: row.notes
-  });
-
-}
-
-    if (row.type === 'PARADA') {
-
-  const selectedStoppage =
-    stoppagesList.find(
-      stoppage =>
-        String(stoppage.code) === row.code
-    );
-
-  onAddStoppage({
-    isRetroactive: true,
-    
-    date: productionDate,
-    operator: selectedCollaborator,
-
-    stoppageCode: Number(row.code),
-
-    stoppageName:
-      selectedStoppage?.name || '',
-
-    startTime: row.startTime,
-
-    endTime: row.endTime,
-
-    notes: row.notes
-  });
-
-}
-
-  });
+  }
 
 };
   
