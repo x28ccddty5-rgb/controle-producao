@@ -846,6 +846,36 @@ export default function App() {
   
   const handleUpdateActivity = (updatedActivity: Activity) => {
 
+   const updatedActivities = activities.map(act =>
+    act.id === updatedActivity.id
+      ? updatedActivity
+      : act
+  );
+
+  const description =
+    `Edição manual da atividade '${updatedActivity.activityName}' do colaborador '${updatedActivity.operator}'.`;
+
+  const newLog = createLog(
+    'ATIVIDADE_ATUALIZACAO',
+    description,
+    updatedActivity.operator,
+    updatedActivity.id
+  );
+
+  persistData(
+    updatedActivities,
+    stoppages,
+    [newLog, ...logs]
+  );
+
+  if (isSupabaseConfigured()) {
+    dbSaveActivity(updatedActivity);
+    dbSaveLog(newLog);
+  }
+
+  setEditingActivity(null);
+};
+    
   const handleUpdateStoppage = (updatedStoppage: Stoppage) => {
 
   const updatedStoppages = stoppages.map(stop =>
@@ -878,35 +908,7 @@ export default function App() {
   setEditingStoppage(null);
   };
     
-  const updatedActivities = activities.map(act =>
-    act.id === updatedActivity.id
-      ? updatedActivity
-      : act
-  );
-
-  const description =
-    `Edição manual da atividade '${updatedActivity.activityName}' do colaborador '${updatedActivity.operator}'.`;
-
-  const newLog = createLog(
-    'ATIVIDADE_ATUALIZACAO',
-    description,
-    updatedActivity.operator,
-    updatedActivity.id
-  );
-
-  persistData(
-    updatedActivities,
-    stoppages,
-    [newLog, ...logs]
-  );
-
-  if (isSupabaseConfigured()) {
-    dbSaveActivity(updatedActivity);
-    dbSaveLog(newLog);
-  }
-
-  setEditingActivity(null);
-};
+ 
   
   // Calculated Active Stoppages Count for Badges
   const activeStoppagesCount = useMemo(() => {
