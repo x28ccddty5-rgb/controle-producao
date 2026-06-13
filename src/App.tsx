@@ -836,6 +836,38 @@ export default function App() {
   setEditingActivity(activity);
   setActiveTab('ACTIVITIES');
   };
+
+  const handleUpdateActivity = (updatedActivity: Activity) => {
+
+  const updatedActivities = activities.map(act =>
+    act.id === updatedActivity.id
+      ? updatedActivity
+      : act
+  );
+
+  const description =
+    `Edição manual da atividade '${updatedActivity.activityName}' do colaborador '${updatedActivity.operator}'.`;
+
+  const newLog = createLog(
+    'ATIVIDADE_ATUALIZACAO',
+    description,
+    updatedActivity.operator,
+    updatedActivity.id
+  );
+
+  persistData(
+    updatedActivities,
+    stoppages,
+    [newLog, ...logs]
+  );
+
+  if (isSupabaseConfigured()) {
+    dbSaveActivity(updatedActivity);
+    dbSaveLog(newLog);
+  }
+
+  setEditingActivity(null);
+};
   
   // Calculated Active Stoppages Count for Badges
   const activeStoppagesCount = useMemo(() => {
@@ -1208,21 +1240,25 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'ACTIVITIES' && (
-                <ActivityManagement 
-                  activities={activities}
-                  onAddActivity={handleAddActivity}
-                  onUpdateActivityQuantity={handleUpdateActivityQuantity}
-                  onUpdateActivityStatus={handleUpdateActivityStatus}
-                  activeStagedOperators={stoppages.filter(s => s.status === 'ATIVA').map(s => s.operator)}
-                  isAdmin={isSupervisorLoggedIn}
-                  onDeleteActivity={handleDeleteActivity}
-                  collaboratorsList={collaborators}
-                  activitiesList={activitiesList}
-                
-                  editingActivity={editingActivity}
-                  setEditingActivity={setEditingActivity}
-                />
+              <ActivityManagement 
+                activities={activities}
+                onAddActivity={handleAddActivity}
+                onUpdateActivity={handleUpdateActivity}
+              
+                onUpdateActivityQuantity={handleUpdateActivityQuantity}
+                onUpdateActivityStatus={handleUpdateActivityStatus}
+              
+                activeStagedOperators={stoppages.filter(s => s.status === 'ATIVA').map(s => s.operator)}
+              
+                isAdmin={isSupervisorLoggedIn}
+                onDeleteActivity={handleDeleteActivity}
+              
+                collaboratorsList={collaborators}
+                activitiesList={activitiesList}
+              
+                editingActivity={editingActivity}
+                setEditingActivity={setEditingActivity}
+              />
               )}
 
               {activeTab === 'STOPPAGES' && (
