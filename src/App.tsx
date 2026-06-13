@@ -640,7 +640,33 @@ const handleDeleteStoppageType = async (
     const prefix = `${formattedDateKey}_${operatorKey}`;
     const newId = `${prefix}_${Date.now()}`;
 
-    let durStr = isRetro ? (newActData.duration || '01:00') : '00:00';
+    let durStr = '00:00';
+
+    if (
+      isRetro &&
+      newActData.startTime &&
+      newActData.endTime
+    ) {
+    
+      const [sh, sm] =
+        newActData.startTime.split(':').map(Number);
+    
+      const [eh, em] =
+        newActData.endTime.split(':').map(Number);
+    
+      const totalMinutes =
+        (eh * 60 + em) -
+        (sh * 60 + sm);
+    
+      const h =
+        Math.floor(totalMinutes / 60);
+    
+      const m =
+        totalMinutes % 60;
+    
+      durStr =
+        `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    }
     let durHours = parseTimeToHours(durStr);
 
     const newActivity: Activity = {
