@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Activity, ActivityStatus } from '../types';
 import { CheckCircle2, ChevronDown, ChevronUp, FilePlus, AlertCircle, Calendar, Clock, Tag } from 'lucide-react';
 //import { motion, AnimatePresence } from 'motion/react';
