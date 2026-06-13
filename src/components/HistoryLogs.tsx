@@ -7,7 +7,10 @@ interface HistoryLogsProps {
   activities: Activity[];
   stoppages: Stoppage[];
   onClearLogs?: () => void;
+  
   onDeleteActivity?: (id: string) => void;
+  onEditActivity?: (activity: Activity) => void;
+  
   onDeleteStoppage?: (id: string) => void;
   isAdmin?: boolean;
 }
@@ -17,6 +20,7 @@ export default function HistoryLogs({
   stoppages, 
   onClearLogs,
   onDeleteActivity,
+  onEditActivity,
   onDeleteStoppage,
   isAdmin
 }: HistoryLogsProps) {
