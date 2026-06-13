@@ -501,6 +501,9 @@ const handleDeleteStoppageType = async (
     async function loadData() {
       try {
         if (isSupabaseConfigured()) {
+          const acts = await dbFetchActivities();
+          const stops = await dbFetchStoppages();
+          
           const activityTypes =
             await dbFetchActivityTypes();
           const stoppageTypes =
@@ -508,6 +511,10 @@ const handleDeleteStoppageType = async (
           const pLogs = await dbFetchLogs();
           
           if (acts !== null && stops !== null && pLogs !== null) {
+
+            setActivities(acts);
+            setStoppages(stops);
+            
             if (activityTypes) {
               setActivitiesList(
                 activityTypes.map(item => ({
