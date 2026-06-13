@@ -218,7 +218,6 @@ export default function ProductionBatch({
             <thead className="sticky top-0 bg-slate-100 z-10">
               <tr className="border-b border-slate-300">
 
-                <th className="text-left p-2">Tipo</th>
                 <th className="text-left p-2 w-[120px]">Tipo</th>
 
                 <th className="text-left p-2 w-[260px]">
