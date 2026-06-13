@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Stoppage } from '../types';
 import { 
   ShieldAlert,
@@ -13,12 +13,21 @@ import {
 
 interface StoppageManagementProps {
   stoppages: Stoppage[];
+
   onAddStoppage: (stoppage: any) => void;
+  onUpdateStoppage?: (stoppage: Stoppage) => void;
+
   onResolveStoppage: (stoppageId: string, resolutionNotes?: string) => void;
+
   onDeleteStoppage?: (stoppageId: string) => void;
+
   isAdmin?: boolean;
+
   collaboratorsList?: string[];
   stoppagesList?: { code: number; name: string }[];
+
+  editingStoppage?: Stoppage | null;
+  setEditingStoppage?: (stoppage: Stoppage | null) => void;
 }
 
 const COLLABORATORS = ['Sara', 'Carlos', 'Marcos', 'João', 'Rafael', 'Luan', 'Karl', 'Luis', 'Daniel'];
@@ -41,12 +50,20 @@ const STOPPAGES_LIST = [
 
 export default function StoppageManagement({ 
   stoppages, 
-  onAddStoppage, 
+  onAddStoppage,
+  onUpdateStoppage,
+
   onResolveStoppage, 
   onDeleteStoppage, 
+
   isAdmin,
+
   collaboratorsList,
-  stoppagesList
+  stoppagesList,
+
+  editingStoppage,
+  setEditingStoppage
+
 }: StoppageManagementProps) {
   const collaboratorsToUse = collaboratorsList || COLLABORATORS;
   const stoppagesToUse = stoppagesList || STOPPAGES_LIST;
@@ -85,6 +102,28 @@ export default function StoppageManagement({
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState('');
 
+    useEffect(() => {
+  
+    if (!editingStoppage) return;
+  
+    setStoppageDate(
+      editingStoppage.date.split('/').reverse().join('-')
+    );
+  
+    setOperator(editingStoppage.operator);
+  
+    setStoppageCode(editingStoppage.stoppageCode);
+  
+    setStartTime(editingStoppage.startTime);
+  
+    setEndTime(editingStoppage.endTime || '');
+  
+    setNotes(editingStoppage.notes || '');
+  
+    setIsFormOpen(true);
+  
+  }, [editingStoppage]);
+  
   const handleCalculateDuration = (start: string, end: string) => {
     try {
       const startParts = start.split(':').map(Number);
@@ -228,6 +267,12 @@ export default function StoppageManagement({
               <div className="bg-gradient-to-r from-red-50 to-rose-50/50 px-6 py-4 border-b border-slate-200">
                 <span className="text-xs font-bold text-red-700 tracking-wider uppercase block">Formulário Digital</span>
                 <h3 className="text-sm font-bold text-slate-800 mt-0.5">CON-372 - ESTOQUE DE CHACOTE • Controle de Parada</h3>
+                
+                {editingStoppage && (
+                  <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700">
+                    Editando parada de {editingStoppage.operator}
+                  </div>
+                )}
               </div>
 
               <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
