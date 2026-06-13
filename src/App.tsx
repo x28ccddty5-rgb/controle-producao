@@ -1042,7 +1042,9 @@ export default function App() {
     );
   }
 
-  const isSupervisorLoggedIn = sessionUser === 'adm';
+  const isSupervisorLoggedIn = 
+    sessionUser === 'lideranca' ||
+    sessionUser === 'adm';
 
   return (
     <div className="flex h-screen w-screen bg-slate-50 font-sans overflow-hidden" id="main-application-panel">
@@ -1064,7 +1066,9 @@ export default function App() {
             
             {/* Sidebar Navigation links */}
             <nav className="space-y-1">
-              {(sessionUser === 'supervisor' || sessionUser === 'visualizador') && (
+              (sessionUser === 'lideranca' ||
+               sessionUser === 'adm' ||
+               sessionUser === 'visualizador') && (
                 <button
                   onClick={() => setActiveTab('DASHBOARD')}
                   id="tab-dashboard"
@@ -1079,7 +1083,9 @@ export default function App() {
                 </button>
               )}
 
-              {(sessionUser === 'producao' || sessionUser === 'supervisor') && (
+              {(sessionUser === 'producao' ||
+                 sessionUser === 'lideranca' ||
+                 sessionUser === 'adm') && (
                 <>
                   <button
                     onClick={() => setActiveTab('ACTIVITIES')}
