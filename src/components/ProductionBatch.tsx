@@ -73,17 +73,70 @@ export default function ProductionBatch({
     notes: ''
   }
 ]);
+
+  const calculateActivityHours = () => {
+
+  let totalMinutes = 0;
+
+  rows.forEach(row => {
+
+    if (
+      row.type !== 'ATIVIDADE' ||
+      !row.startTime ||
+      !row.endTime
+    ) {
+      return;
+    }
+
+    const [startHour, startMinute] =
+      row.startTime.split(':').map(Number);
+
+    const [endHour, endMinute] =
+      row.endTime.split(':').map(Number);
+
+    const start =
+      startHour * 60 + startMinute;
+
+    const end =
+      endHour * 60 + endMinute;
+
+    totalMinutes += end - start;
+
+  });
+
+  return totalMinutes;
+};
   
   return (
     <div className="space-y-6">
 
       <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h2 className="text-xl font-bold text-slate-800 mb-4">
-          Produção em Lote
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+
+            <h2 className="text-xl font-bold text-slate-800">
+              Produção em Lote
+            </h2>
+          
+            <button
+              className="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+            >
+              Lançar Lote Completo
+            </button>
+          
+          </div>
 
         <div className="grid grid-cols-2 gap-4">
 
+          <div className="mt-4 text-sm text-slate-600">
+
+              Horas de produção calculadas:
+            
+              <span className="font-bold ml-2">
+                {(calculateActivityHours() / 60).toFixed(2)}h
+              </span>
+            
+            </div>
+          
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Data da Produção
