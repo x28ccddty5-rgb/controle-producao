@@ -10,6 +10,11 @@ import {
   dbFetchActivities,
   dbFetchStoppages,
   dbFetchLogs,
+
+  dbFetchUsers,
+  dbSaveUser,
+  dbDeleteUser,
+  
   dbSaveActivity,
   dbSaveStoppage,
   dbSaveLog,
@@ -83,32 +88,40 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
 
   // Dynamic user list
-  const [usersList, setUsersList] = useState<CustomUser[]>(() => {
-    const saved = localStorage.getItem('porto_custom_users_v2');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= 4) {
-          // Always ensure the default accounts are configured exactly as requested (Sara, Jonas, Matheus, Visualizador)
-          const updated = [...parsed];
-          DEFAULT_USERS.forEach(defU => {
-            const index = updated.findIndex(u => u.username === defU.username);
-            if (index >= 0) {
-              updated[index] = defU; // Overwrite standard ones to match requested defaults
-            } else {
-              updated.push(defU);
-            }
-          });
-          return updated;
-        }
-      } catch (e) {
-        // Fallback
-      }
-    }
-    localStorage.setItem('porto_custom_users_v2', JSON.stringify(DEFAULT_USERS));
-    return DEFAULT_USERS;
-  });
+ const [usersList, setUsersList] =
+  useState<CustomUser[]>([]);
 
+  const loadUsers = async () => {
+  try {
+
+    const users = await dbFetchUsers();
+
+    if (users) {
+
+      setUsersList(users);
+
+      localStorage.setItem(
+        'porto_custom_users_v2',
+        JSON.stringify(users)
+      );
+
+      return;
+    }
+
+  } catch (err) {
+    console.error(err);
+  }
+
+  const fallback =
+    localStorage.getItem(
+      'porto_custom_users_v2'
+    );
+
+  if (fallback) {
+    setUsersList(JSON.parse(fallback));
+  }
+};
+  
   // Dynamic lists states for ADM management
   const [collaborators, setCollaborators] = useState<string[]>(() => {
     const saved = localStorage.getItem('porto_collaborators');
@@ -377,6 +390,9 @@ export default function App() {
       } catch (e) {
         console.error('Falha ao ler dados:', e);
       } finally {
+        
+        await loadUsers();
+        
         setIsInitializing(false);
       }
     }
