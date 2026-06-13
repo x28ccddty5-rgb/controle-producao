@@ -1441,6 +1441,9 @@ const handleDeleteStoppageType = async (
                   collaborators={collaborators}
                   activitiesList={activitiesList}
                   stoppagesList={stoppagesList}
+
+                  onAddActivity={handleAddActivity}
+                  onAddStoppage={handleAddStoppage}
                 />
               )}
               
