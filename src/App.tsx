@@ -170,7 +170,7 @@ const loadStoppageTypes = async () => {
 
   const [activitiesList, setActivitiesList] = useState<
   { code: number; label: string }[]
->([]);
+  >([]);
 
   const [stoppagesList, setStoppagesList] =
   useState<
@@ -1513,7 +1513,6 @@ const handleDeleteStoppageType = async (
                   usersList={usersList}
                   onUpdateUsersList={(newList) => {
                     setUsersList(newList);
-                    );
                   }}
                   onCreateUser={handleCreateUser}
                   onUpdateUser={handleUpdateUser}
