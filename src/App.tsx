@@ -7,6 +7,7 @@ import {
 } from './initialData';
 import {
   isSupabaseConfigured,
+
   dbFetchActivities,
   dbFetchStoppages,
   dbFetchLogs,
@@ -14,12 +15,22 @@ import {
   dbFetchUsers,
   dbSaveUser,
   dbDeleteUser,
-  
+
+  dbFetchActivityTypes,
+  dbSaveActivityType,
+  dbDeleteActivityType,
+
+  dbFetchStoppageTypes,
+  dbSaveStoppageType,
+  dbDeleteStoppageType,
+
   dbSaveActivity,
   dbSaveStoppage,
   dbSaveLog,
+
   dbDeleteActivity,
   dbDeleteStoppage,
+
   dbClearLogs
 } from './supabase';
 import Dashboard from './components/Dashboard';
@@ -120,6 +131,34 @@ export default function App() {
   if (fallback) {
     setUsersList(JSON.parse(fallback));
   }
+};
+
+  const loadActivityTypes = async () => {
+
+  const data = await dbFetchActivityTypes();
+
+  if (!data) return;
+
+  setActivitiesList(
+    data.map(item => ({
+      code: item.code,
+      label: item.label
+    }))
+  );
+};
+
+const loadStoppageTypes = async () => {
+
+  const data = await dbFetchStoppageTypes();
+
+  if (!data) return;
+
+  setStoppagesList(
+    data.map(item => ({
+      code: item.code,
+      name: item.name
+    }))
+  );
 };
   
   // Dynamic lists states for ADM management
@@ -364,6 +403,72 @@ const handleDeleteUser = async (
   }
 
   await loadUsers();
+};
+
+  const handleCreateActivityType = async (
+  activityType: {
+    code: number;
+    label: string;
+  }
+) => {
+
+  const success =
+    await dbSaveActivityType(activityType);
+
+  if (!success) {
+    alert('Erro ao salvar atividade.');
+    return;
+  }
+
+  await loadActivityTypes();
+};
+
+const handleDeleteActivityType = async (
+  code: number
+) => {
+
+  const success =
+    await dbDeleteActivityType(code);
+
+  if (!success) {
+    alert('Erro ao excluir atividade.');
+    return;
+  }
+
+  await loadActivityTypes();
+};
+
+const handleCreateStoppageType = async (
+  stoppageType: {
+    code: number;
+    name: string;
+  }
+) => {
+
+  const success =
+    await dbSaveStoppageType(stoppageType);
+
+  if (!success) {
+    alert('Erro ao salvar parada.');
+    return;
+  }
+
+  await loadStoppageTypes();
+};
+
+const handleDeleteStoppageType = async (
+  code: number
+) => {
+
+  const success =
+    await dbDeleteStoppageType(code);
+
+  if (!success) {
+    alert('Erro ao excluir parada.');
+    return;
+  }
+
+  await loadStoppageTypes();
 };
   
   const handleSelectUser = (user: string) => {
