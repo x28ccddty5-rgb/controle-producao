@@ -282,7 +282,14 @@ export default function HistoryLogs({
                 <option value="1">1 - Separação</option>
                 <option value="2">2 - Armazenamento</option>
                 <option value="3">3 - Remontar Picadeiras</option>
-                <option value="4">4 - Outros</option>
+                <option value="4">4 - Trocar Strechs dos Pallets</option>
+                <option value="5">5 - Movimentação</option>
+                <option value="6">6 - Atualizar Etiquetas</option>
+                <option value="7">7 - Endereçamento</option>
+                <option value="8">8 - Empilhamento</option>
+                <option value="9">9 - Liberando peças do Forno</option>
+                <option value="10">10 - Inventário Rotativo</option>
+                <option value="11">11 - Outros</option>
               </>
             ) : (
               <>
