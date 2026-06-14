@@ -909,15 +909,6 @@ const handleDeleteStoppageType = async (
 
   const newLogs: ProductionLog[] = [];
 
-    newLogs.push({
-    id: `LOG_${id}`,
-    productionId: id,
-    type: 'ACTIVITY',
-    date: formattedDate,
-    operator: selectedOperator,
-    createdAt: new Date().toISOString()
-  });
-  
   rows.forEach(row => {
 
     if (row.type === 'ATIVIDADE') {
@@ -1038,7 +1029,7 @@ const handleDeleteStoppageType = async (
           .replace(/\s+/g, '-');
       
       const id =
-        `${formattedDateKey}_${operatorKey}_${Date.now()}`;
+        `${formattedDateKey}_${operatorKey}_${Date.now()}_${row.id}`;
   
         const [sh, sm] =
         row.startTime.split(':').map(Number);
