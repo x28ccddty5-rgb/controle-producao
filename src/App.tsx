@@ -185,11 +185,11 @@ const loadStoppageTypes = async () => {
 
   // Application Authentication Sessions (3 roles: producao / supervisor / visualizador)
   const [sessionUser, setSessionUser] = useState<'producao' | 'visualizador' | 'lideranca' | 'adm' |null>(() => {
-    return (localStorage.getItem('porto_session_user') as 'producao' | 'visualizador' | 'lideranca' | 'adm') || null;
+    return (sessionStorage.getItem('porto_session_user') as 'producao' | 'visualizador' | 'lideranca' | 'adm') || null;
   });
 
   const [sessionUserName, setSessionUserName] = useState<string>(() => {
-    return localStorage.getItem('porto_session_user_name') || 'Visitante';
+    return sessionStorage.getItem('porto_session_user_name') || 'Visitante';
   });
 
   // Entry tabs and states (register tab removed visually)
@@ -238,8 +238,8 @@ const loadStoppageTypes = async () => {
     setSessionUserName(matchedUser.name);
     setGlobalCreator(matchedUser.name);
 
-    localStorage.setItem('porto_session_user', matchedUser.role);
-    localStorage.setItem('porto_session_user_name', matchedUser.name);
+    sessionStorage.setItem('porto_session_user', matchedUser.role);
+    sessionStorage.setItem('porto_session_user_name', matchedUser.name);
     localStorage.setItem('porto_global_creator', matchedUser.name);
 
     setActiveTab(matchedUser.role === 'producao' ? 'ACTIVITIES' : 'DASHBOARD');
@@ -315,8 +315,8 @@ const loadStoppageTypes = async () => {
   const handleLogout = () => {
     setSessionUser(null);
     setSessionUserName('Visitante');
-    localStorage.removeItem('porto_session_user');
-    localStorage.removeItem('porto_session_user_name');
+    sessionStorage.removeItem('porto_session_user');
+    sessionStorage.removeItem('porto_session_user_name');
     setLoginPassword('');
     setLoginUsername('');
     setLoginError('');
@@ -448,7 +448,7 @@ const handleDeleteStoppageType = async (
   const [activeTab, setActiveTab] = useState<string>(() => {
     const savedUser = localStorage.getItem('porto_session_user');
     return savedUser === 'producao'
-      ? 'PRODUCTION'
+      ? 'PRODUCTION'a
       : 'DASHBOARD';
   });
 
