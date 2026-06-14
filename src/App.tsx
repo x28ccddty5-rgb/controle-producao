@@ -1091,18 +1091,22 @@ const handleDeleteStoppageType = async (
     [...newLogs, ...logs]
   );
 
-  if (isSupabaseConfigured()) {
-
+    if (isSupabaseConfigured()) {
+  
     newActivities.forEach(
       dbSaveActivity
     );
-
+  
     newStoppages.forEach(
       dbSaveStoppage
     );
-
+  
+    newLogs.forEach(
+      dbSaveLog
+    );
+  
   }
-
+  
 };
   
   // Stoppage Resolution
