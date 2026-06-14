@@ -325,7 +325,6 @@ export default function HistoryLogs({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="sticky top-0 z-10 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider select-none bg-slate-50">
-                      <th className="py-3 px-4 min-w-[130px]">ID</th>
                       <th className="py-3 px-4 text-center">Data</th>
                       <th className="py-3 px-4">Colaborador</th>
                       <th className="py-3 px-4 text-center">Cód Act</th>
@@ -345,7 +344,6 @@ export default function HistoryLogs({
                   <tbody className="divide-y divide-slate-100 text-slate-700 font-sans">
                     {filteredActivities.map((act) => (
                       <tr key={act.id} className="hover:bg-slate-50/60 font-medium">
-                        <td className="py-3 px-4 font-mono text-slate-500 select-all font-bold whitespace-nowrap">{act.id}</td>
                         <td className="py-3 px-4 text-center whitespace-nowrap font-mono text-slate-600">{act.date}</td>
                         <td className="py-3 px-4 text-slate-900 font-bold">{act.operator}</td>
                         <td className="py-3 px-4 text-center font-mono">
@@ -416,13 +414,14 @@ export default function HistoryLogs({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="sticky top-0 z-10 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider select-none bg-slate-50">
-                      <th className="py-3 px-4 min-w-[130px]">ID</th>
                       <th className="py-3 px-4 text-center">Data</th>
                       <th className="py-3 px-4">Colaborador</th>
                       <th className="py-3 px-4 text-center">Nº Parada</th>
                       <th className="py-3 px-4 text-center">Início</th>
                       <th className="py-3 px-4 text-center">Fim</th>
                       <th className="py-3 px-4 text-center">Duração</th>
+                      <th className="py-3 px-4 text-center">Mov. Paleteira</th>
+                      <th className="py-3 px-4 text-center">Mov. Empilhadeira</th>
                       <th className="py-3 px-4">Observação</th>
                       <th className="py-3 px-4">Lançador</th>
                       <th className="py-3 px-4">Data Lançamento</th>
@@ -432,7 +431,6 @@ export default function HistoryLogs({
                   <tbody className="divide-y divide-slate-100 text-slate-700 font-sans">
                     {filteredStoppages.map((stop) => (
                       <tr key={stop.id} className="hover:bg-slate-50/60 font-medium">
-                        <td className="py-3 px-4 font-mono text-slate-500 select-all font-bold whitespace-nowrap">{stop.id}</td>
                         <td className="py-3 px-4 text-center whitespace-nowrap font-mono text-slate-600">{stop.date}</td>
                         <td className="py-3 px-4 text-slate-900 font-bold">{stop.operator}</td>
                         <td className="py-3 px-4 text-center font-mono">
@@ -443,6 +441,8 @@ export default function HistoryLogs({
                         <td className="py-3 px-4 text-center font-mono">{stop.startTime}</td>
                         <td className="py-3 px-4 text-center font-mono">{stop.endTime || '-'}</td>
                         <td className="py-3 px-4 text-center font-mono font-bold text-slate-800 bg-slate-50/30 whitespace-nowrap">{stop.duration}</td>
+                        <td className="py-3 px-4 text-center font-mono">{act.palletJackId || '-'}</td>
+                        <td className="py-3 px-4 text-center font-mono">{act.forkliftId || '-'}</td>
                         <td className="py-3 px-4 text-slate-500 italic max-w-sm truncate" title={stop.notes}>{stop.notes || '-'}</td>
                         <td className="py-3 px-4 text-slate-600 font-semibold">{stop.creator || 'Sara'}</td>
                         <td className="py-3 px-4 text-slate-500 font-mono whitespace-nowrap">{stop.createdAt || '-'}</td>
