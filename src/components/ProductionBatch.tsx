@@ -110,12 +110,16 @@ export default function ProductionBatch({
     const [endHour, endMinute] =
       row.endTime.split(':').map(Number);
 
-    const start =
-      startHour * 60 + startMinute;
-
-    const end =
+    let start =
+    startHour * 60 + startMinute;
+  
+    let end =
       endHour * 60 + endMinute;
-
+    
+    if (end < start) {
+      end += 24 * 60;
+    }
+    
     totalMinutes += end - start;
 
   });
@@ -137,6 +141,302 @@ export default function ProductionBatch({
     return;
   }
 
+    for (const row of rows) {
+
+  const isEmptyRow =
+  !row.code &&
+  !row.startTime &&
+  !row.endTime &&
+  !row.local?.trim() &&
+  !row.listId?.trim() &&
+  !row.notes?.trim() &&
+  !row.palletJackId?.trim() &&
+  !row.forkliftId?.trim() &&
+  (!row.producedQuantity || row.producedQuantity === 0) &&
+  (!row.itemsQuantity || row.itemsQuantity === 0);
+
+if (isEmptyRow) {
+  continue;
+}
+      
+  if (!row.code) {
+  alert(`Linha ${rows.indexOf(row) + 1}: selecione uma atividade ou parada.`);
+  return;
+}
+      
+  if (!row.startTime || !row.endTime) {
+  alert(`Linha ${rows.indexOf(row) + 1}: informe horário inicial e final.`);
+  return;
+}
+
+  const [sh, sm] =
+  row.startTime.split(':').map(Number);
+
+const [eh, em] =
+  row.endTime.split(':').map(Number);
+
+const startMinutes =
+  sh * 60 + sm;
+
+const endMinutes =
+  eh * 60 + em;
+
+if (startMinutes === endMinutes) {
+
+  alert(
+    `Linha ${rows.indexOf(row) + 1}: horário inicial e final não podem ser iguais.`
+  );
+
+  return;
+}
+      
+  if (
+  row.type === 'ATIVIDADE' &&
+  !row.local?.trim()
+) {
+  alert(
+     `Linha ${rows.indexOf(row) + 1}: informe o local da atividade.`
+  );
+  return;
+}
+
+  if (
+  row.type === 'ATIVIDADE' &&
+  Number(row.code) === 1 &&
+  !row.listId?.trim()
+) {
+  alert(
+    `Linha ${rows.indexOf(row) + 1}: informe o número da lista.`
+  );
+  return;
+}
+
+    if (
+  row.type === 'ATIVIDADE' &&
+  [1, 2, 3].includes(Number(row.code))
+) {
+
+  if (
+    row.producedQuantity <= 0 ||
+    row.itemsQuantity <= 0
+  ) {
+
+    alert(
+      `Linha ${rows.indexOf(row) + 1}: informe quantidade de peças e itens.`
+    );
+
+    return;
+  }
+
+}
+
+  if (
+  row.producedQuantity < 0 ||
+  row.itemsQuantity < 0
+) {
+
+  alert(
+    `Linha ${rows.indexOf(row) + 1}: quantidade inválida.`
+  );
+
+  return;
+}
+      
+}
+
+let totalActivityMinutes = 0;
+
+for (const row of rows) {
+
+  if (row.type !== 'ATIVIDADE') {
+    continue;
+  }
+
+  if (!row.startTime || !row.endTime) {
+    continue;
+  }
+
+  const [sh, sm] =
+    row.startTime.split(':').map(Number);
+
+  const [eh, em] =
+    row.endTime.split(':').map(Number);
+
+  let startMinutes =
+    sh * 60 + sm;
+
+  let endMinutes =
+    eh * 60 + em;
+
+  // suporta virada de dia
+  if (endMinutes < startMinutes) {
+    endMinutes += 24 * 60;
+  }
+
+  totalActivityMinutes +=
+    endMinutes - startMinutes;
+}
+
+  const minimumMinutes = 450; // 7h30
+
+if (totalActivityMinutes < minimumMinutes) {
+
+  const hours =
+    Math.floor(totalActivityMinutes / 60);
+
+  const minutes =
+    totalActivityMinutes % 60;
+
+  const confirmed =
+    window.confirm(
+      `A soma das atividades é ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}.
+
+A jornada mínima esperada é 07:30.
+
+Deseja continuar mesmo assim?`
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+}
+    
+    const activityRows = rows.filter(
+  row =>
+    row.type === 'ATIVIDADE' &&
+    row.startTime &&
+    row.endTime
+);
+
+let hasConflict = false;
+
+for (let i = 0; i < activityRows.length; i++) {
+
+  const current =
+    activityRows[i];
+
+  const [sh1, sm1] =
+    current.startTime.split(':').map(Number);
+
+  const [eh1, em1] =
+    current.endTime.split(':').map(Number);
+
+  let start1 =
+    sh1 * 60 + sm1;
+
+  let end1 =
+    eh1 * 60 + em1;
+
+  if (end1 < start1) {
+    end1 += 24 * 60;
+  }
+
+  for (
+    let j = i + 1;
+    j < activityRows.length;
+    j++
+  ) {
+
+    const next =
+      activityRows[j];
+
+    const [sh2, sm2] =
+      next.startTime.split(':').map(Number);
+
+    const [eh2, em2] =
+      next.endTime.split(':').map(Number);
+
+    let start2 =
+      sh2 * 60 + sm2;
+
+    let end2 =
+      eh2 * 60 + em2;
+
+    if (end2 < start2) {
+      end2 += 24 * 60;
+    }
+
+    const overlap =
+      start1 < end2 &&
+      end1 > start2;
+
+    if (overlap) {
+
+      hasConflict = true;
+
+      break;
+
+    }
+
+  }
+
+  if (hasConflict) {
+    break;
+  }
+
+}
+
+    if (hasConflict) {
+
+  const confirmed =
+    window.confirm(
+      'Existe conflito de horários entre os lançamentos. Deseja continuar mesmo assim?'
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+}
+
+    let hasLongDuration = false;
+
+for (const row of rows) {
+
+  if (!row.startTime || !row.endTime) {
+    continue;
+  }
+
+  const [sh, sm] =
+    row.startTime.split(':').map(Number);
+
+  const [eh, em] =
+    row.endTime.split(':').map(Number);
+
+  let startMinutes =
+    sh * 60 + sm;
+
+  let endMinutes =
+    eh * 60 + em;
+
+  if (endMinutes < startMinutes) {
+    endMinutes += 24 * 60;
+  }
+
+  const durationMinutes =
+    endMinutes - startMinutes;
+
+  if (durationMinutes > 720) {
+    hasLongDuration = true;
+    break;
+  }
+
+}
+
+    if (hasLongDuration) {
+
+  const confirmed =
+    window.confirm(
+      'Foi identificado um lançamento com duração superior a 12 horas. Deseja continuar mesmo assim?'
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+}
+    
     onAddBatch(
     rows,
     productionDate,
@@ -395,7 +695,8 @@ alert('Lote lançado com sucesso.');
                   <td className="p-2 w-[90px]">
                     <input
                       className={`border rounded px-2 py-1 w-full ${
-                        row.type === 'PARADA'
+                        row.type === 'PARADA' ||
+                        Number(row.code) !== 1
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                           : ''
                       }`}
@@ -412,7 +713,10 @@ alert('Lote lançado com sucesso.');
                         )
                       )
                     }
-                      disabled={row.type === 'PARADA'}
+                      disabled={
+                      row.type === 'PARADA' ||
+                      Number(row.code) !== 1
+                    }
                     />
                   </td>
             
