@@ -651,9 +651,18 @@ const handleDeleteStoppageType = async (
       const [eh, em] =
         newActData.endTime.split(':').map(Number);
     
+      let startMinutes =
+      sh * 60 + sm;
+    
+      let endMinutes =
+        eh * 60 + em;
+      
+      if (endMinutes < startMinutes) {
+        endMinutes += 24 * 60;
+      }
+      
       const totalMinutes =
-        (eh * 60 + em) -
-        (sh * 60 + sm);
+        endMinutes - startMinutes;
     
       const h =
         Math.floor(totalMinutes / 60);
@@ -1053,9 +1062,18 @@ const handleDeleteStoppageType = async (
       const [eh, em] =
         row.endTime.split(':').map(Number);
       
+      let startMinutes =
+      sh * 60 + sm;
+
+      let endMinutes =
+        eh * 60 + em;
+      
+      if (endMinutes < startMinutes) {
+        endMinutes += 24 * 60;
+      }
+      
       const totalMinutes =
-        (eh * 60 + em) -
-        (sh * 60 + sm);
+        endMinutes - startMinutes;
       
       const duration =
         `${String(Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
