@@ -909,6 +909,15 @@ const handleDeleteStoppageType = async (
 
   const newLogs: ProductionLog[] = [];
 
+    newLogs.push({
+    id: `LOG_${id}`,
+    productionId: id,
+    type: 'ACTIVITY',
+    date: formattedDate,
+    operator: selectedOperator,
+    createdAt: new Date().toISOString()
+  });
+  
   rows.forEach(row => {
 
     if (row.type === 'ATIVIDADE') {
@@ -943,7 +952,7 @@ const handleDeleteStoppageType = async (
         .replace(/\s+/g, '-');
     
     const id =
-      `${formattedDateKey}_${operatorKey}_${Date.now()}`;
+    `${formattedDateKey}_${operatorKey}_${Date.now()}_${row.id}`;
 
       const activity: Activity = {
         id,
@@ -984,7 +993,16 @@ const handleDeleteStoppageType = async (
 
       newActivities.push(activity);
 
-    }
+        newLogs.push(
+          createLog(
+            'ATIVIDADE',
+            `Atividade ${activity.activityName} lançada em lote`,
+            collaborator,
+            id
+          )
+        );
+        
+        }
 
     if (row.type === 'PARADA') {
       
@@ -1064,14 +1082,22 @@ const handleDeleteStoppageType = async (
 
       newStoppages.push(stoppage);
 
-    }
-
+      newLogs.push(
+        createLog(
+          'PARADA',
+          `Parada ${stoppage.stoppageName} lançada em lote`,
+          collaborator,
+          id
+        )
+      );
+      
+      }
   });
 
   persistData(
     [...newActivities, ...activities],
     [...newStoppages, ...stoppages],
-    logs
+    [...newLogs, ...logs]
   );
 
   if (isSupabaseConfigured()) {
