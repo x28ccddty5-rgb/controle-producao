@@ -333,6 +333,8 @@ export default function HistoryLogs({
                       <th className="py-3 px-4 text-center">Início</th>
                       <th className="py-3 px-4 text-center">Fim</th>
                       <th className="py-3 px-4 text-center">Duração</th>
+                      <th className="py-3 px-4 text-center">Mov.Paleteira</th>
+                      <th className="py-3 px-4 text-center">Mov.Empilhadeira</th>
                       <th className="py-3 px-4 text-right">Qtd Pçs</th>
                       <th className="py-3 px-4 text-right">Qtd Itens</th>
                       <th className="py-3 px-4">Observação</th>
@@ -356,6 +358,8 @@ export default function HistoryLogs({
                         <td className="py-3 px-4 text-center font-mono">{act.startTime}</td>
                         <td className="py-3 px-4 text-center font-mono">{act.endTime || '-'}</td>
                         <td className="py-3 px-4 text-center font-mono font-bold text-slate-800 bg-slate-50/30 whitespace-nowrap">{act.duration}</td>
+                        <td className="py-3 px-4 text-center font-mono">{act.palletJackId || '-'}</td>
+                        <td className="py-3 px-4 text-center font-mono">{act.forkliftId || '-'}</td>
                         <td className="py-3 px-4 text-right font-mono text-slate-900 font-bold">{act.producedQuantity.toLocaleString('pt-BR')}</td>
                         <td className="py-3 px-4 text-right font-mono text-slate-900 font-bold">{act.itemsQuantity.toLocaleString('pt-BR')}</td>
                         <td className="py-3 px-4 text-slate-500 italic max-w-sm truncate" title={act.notes}>{act.notes || '-'}</td>
@@ -420,8 +424,6 @@ export default function HistoryLogs({
                       <th className="py-3 px-4 text-center">Início</th>
                       <th className="py-3 px-4 text-center">Fim</th>
                       <th className="py-3 px-4 text-center">Duração</th>
-                      <th className="py-3 px-4 text-center">Mov. Paleteira</th>
-                      <th className="py-3 px-4 text-center">Mov. Empilhadeira</th>
                       <th className="py-3 px-4">Observação</th>
                       <th className="py-3 px-4">Lançador</th>
                       <th className="py-3 px-4">Data Lançamento</th>
@@ -441,8 +443,6 @@ export default function HistoryLogs({
                         <td className="py-3 px-4 text-center font-mono">{stop.startTime}</td>
                         <td className="py-3 px-4 text-center font-mono">{stop.endTime || '-'}</td>
                         <td className="py-3 px-4 text-center font-mono font-bold text-slate-800 bg-slate-50/30 whitespace-nowrap">{stop.duration}</td>
-                        <td className="py-3 px-4 text-center font-mono">{act.palletJackId || '-'}</td>
-                        <td className="py-3 px-4 text-center font-mono">{act.forkliftId || '-'}</td>
                         <td className="py-3 px-4 text-slate-500 italic max-w-sm truncate" title={stop.notes}>{stop.notes || '-'}</td>
                         <td className="py-3 px-4 text-slate-600 font-semibold">{stop.creator || 'Sara'}</td>
                         <td className="py-3 px-4 text-slate-500 font-mono whitespace-nowrap">{stop.createdAt || '-'}</td>
