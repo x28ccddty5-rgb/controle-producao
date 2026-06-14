@@ -448,7 +448,7 @@ const handleDeleteStoppageType = async (
   const [activeTab, setActiveTab] = useState<string>(() => {
     const savedUser = localStorage.getItem('porto_session_user');
     return savedUser === 'producao'
-      ? 'PRODUCTION'a
+      ? 'PRODUCTION'
       : 'DASHBOARD';
   });
 
