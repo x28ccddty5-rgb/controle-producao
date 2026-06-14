@@ -945,6 +945,22 @@ const handleDeleteStoppageType = async (
     const id =
     `${formattedDateKey}_${operatorKey}_${Date.now()}_${row.id}`;
 
+    const [sh, sm] =
+    row.startTime.split(':').map(Number);
+  
+    const [eh, em] =
+      row.endTime.split(':').map(Number);
+    
+    const totalMinutes =
+      (eh * 60 + em) -
+      (sh * 60 + sm);
+    
+    const duration =
+      `${String(Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
+    
+    const durationHours =
+      totalMinutes / 60;
+      
       const activity: Activity = {
         id,
         date: formattedDate,
@@ -960,8 +976,8 @@ const handleDeleteStoppageType = async (
         startTime: row.startTime,
         endTime: row.endTime,
 
-        duration: '00:00',
-        durationHours: 0,
+        duration,
+        durationHours,
 
         palletJackId: row.palletJackId,
         forkliftId: row.forkliftId,
