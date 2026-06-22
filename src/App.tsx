@@ -1709,34 +1709,36 @@ const handleDeleteStoppageType = async (
               )
             )}
 
-            {/* Quick resets buttons */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/50 p-1 rounded-lg">
-              <button
-                onClick={handleResetToDemo}
-                id="reset-demo-btn"
-                title="Restaurar dados originais da planilha"
-                className="text-slate-400 hover:text-slate-600 hover:bg-white p-1 rounded transition cursor-pointer"
-              >
-
-                <button
-                onClick={fixHistoricalDurations}
-                title="Corrigir durações"
-                className="text-amber-500 hover:text-amber-700 hover:bg-amber-50 p-1 rounded transition cursor-pointer"
-              >
-                🔧
-              </button>
-                
-                <RefreshCw className="h-4 w-4" />
-              </button>
-              <button
-                onClick={handleWipeData}
-                id="wipe-data-btn"
-                title="Limpar todos os registros"
-                className="text-red-400 hover:text-red-600 hover:bg-rose-50/50 p-1 rounded transition cursor-pointer"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
+           {/* Quick resets buttons */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/50 p-1 rounded-lg">
+          
+            <button
+              onClick={handleResetToDemo}
+              id="reset-demo-btn"
+              title="Restaurar dados originais da planilha"
+              className="text-slate-400 hover:text-slate-600 hover:bg-white p-1 rounded transition cursor-pointer"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          
+            <button
+              onClick={fixHistoricalDurations}
+              title="Corrigir durações"
+              className="text-amber-500 hover:text-amber-700 hover:bg-amber-50 p-1 rounded transition cursor-pointer"
+            >
+              🔧
+            </button>
+          
+            <button
+              onClick={handleWipeData}
+              id="wipe-data-btn"
+              title="Limpar todos os registros"
+              className="text-red-400 hover:text-red-600 hover:bg-rose-50/50 p-1 rounded transition cursor-pointer"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          
+          </div>
 
             {activeTab !== 'DASHBOARD' && activeTab !== 'ACTIVITIES' && (
               <button
