@@ -510,7 +510,7 @@ const handleDeleteStoppageType = async (
         if (savedActivities && savedStoppages && savedLogs) {
           // Se contiver dados demonstração do mock original, limpamos automaticamente para a nova operação real
           if (savedActivities.includes('act-active-demo-1') || savedActivities.includes('20260510_KARL-2') || savedActivities.includes('20260510_KARL-3')) {
-            persistData([], [], []);
+            ([], [], []);
           } else {
             persistData(
               JSON.parse(savedActivities),
@@ -562,6 +562,67 @@ const handleDeleteStoppageType = async (
     localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(updatedLogs));
   }
 
+    const fixHistoricalDurations = async () => {
+
+  const correctedActivities = activities.map(act => {
+
+    if (!act.startTime || !act.endTime) {
+      return act;
+    }
+
+    const [sh, sm] =
+      act.startTime.split(':').map(Number);
+
+    const [eh, em] =
+      act.endTime.split(':').map(Number);
+
+    let startMinutes =
+      sh * 60 + sm;
+
+    let endMinutes =
+      eh * 60 + em;
+
+    if (endMinutes < startMinutes) {
+      endMinutes += 24 * 60;
+    }
+
+    const totalMinutes =
+      endMinutes - startMinutes;
+
+    const hours =
+      Math.floor(totalMinutes / 60);
+
+    const minutes =
+      totalMinutes % 60;
+
+    return {
+      ...act,
+      duration:
+        `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}`,
+      durationHours:
+        totalMinutes / 60
+    };
+
+  });
+
+  persistData(
+    correctedActivities,
+    stoppages,
+    logs
+  );
+
+  if (isSupabaseConfigured()) {
+
+    for (const activity of correctedActivities) {
+      await dbSaveActivity(activity);
+    }
+
+  }
+
+  alert('Durações históricas corrigidas com sucesso.');
+
+};
+  
   // 3. Header Clock update
   useEffect(() => {
     const updateClock = () => {
@@ -1656,6 +1717,15 @@ const handleDeleteStoppageType = async (
                 title="Restaurar dados originais da planilha"
                 className="text-slate-400 hover:text-slate-600 hover:bg-white p-1 rounded transition cursor-pointer"
               >
+
+                <button
+                onClick={fixHistoricalDurations}
+                title="Corrigir durações"
+                className="text-amber-500 hover:text-amber-700 hover:bg-amber-50 p-1 rounded transition cursor-pointer"
+              >
+                🔧
+              </button>
+                
                 <RefreshCw className="h-4 w-4" />
               </button>
               <button
