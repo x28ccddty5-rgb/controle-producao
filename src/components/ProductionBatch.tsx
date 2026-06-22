@@ -229,29 +229,12 @@ if (startMinutes === endMinutes) {
   }
 
 }
-
+      
   if (
   row.producedQuantity < 0 ||
   row.itemsQuantity < 0
 ) {
 
-  if (
-  row.type === 'ATIVIDADE' &&
-  row.producedQuantity > 10000
-) {
-
-  const confirmed = window.confirm(
-    `Linha ${rows.indexOf(row) + 1}: foram informadas ${row.producedQuantity.toLocaleString('pt-BR')} peças.\n\n` +
-    `Esse valor está acima do limite de conferência de 15.000 peças para uma única atividade.\n\n` +
-    `Deseja continuar mesmo assim?`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-}
-    
   alert(
     `Linha ${rows.indexOf(row) + 1}: quantidade inválida.`
   );
@@ -259,6 +242,23 @@ if (startMinutes === endMinutes) {
   return;
 }
       
+  if (
+  row.type === 'ATIVIDADE' &&
+  row.producedQuantity > 10000
+) {
+
+  const confirmed = window.confirm(
+    `Linha ${rows.indexOf(row) + 1}: foram informadas ${row.producedQuantity.toLocaleString('pt-BR')} peças.\n\n` +
+    `Esse valor está acima do limite de conferência de 10.000 peças para uma única atividade.\n\n` +
+    `Deseja continuar mesmo assim?`
+  );
+
+  if (!confirmed) {
+    return;
+    }
+
+  }
+
 }
 
 let totalActivityMinutes = 0;
