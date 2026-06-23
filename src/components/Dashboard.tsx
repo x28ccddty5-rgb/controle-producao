@@ -318,22 +318,33 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
 
   const dynamicSectorStats = useMemo(() => {
     const sectorsDef = [
-      { code: 1, label: 'Separação', meta: 120 },
-      { code: 2, label: 'Armazenamento', meta: 150 },
-      { code: 3, label: 'Remontar Picadeiras', meta: 90 }
+      { code: 1, label: 'Separação', meta: 1667 },
+      { code: 2, label: 'Armazenamento', meta: 1458 },
+      { code: 3, label: 'Remontar Picadeiras', meta: 42 }
     ];
 
     return sectorsDef.map(sec => {
       const records = dynamicChartActivities.filter(a => a.activityCode === sec.code && a.status === 'CONCLUIDO');
       
       let totalPieces = 0;
-      let totalHours = 0;
+
+      let periodHours = 0;
+
+      const start = new Date(startDate + 'T00:00:00');
+      const end = new Date(endDate + 'T23:59:59');
+      
+      periodHours =
+        (end.getTime() - start.getTime()) /
+        (1000 * 60 * 60);
+
       records.forEach(r => {
         totalPieces += r.producedQuantity || 0;
-        totalHours += r.durationHours || 0;
       });
 
-      const avgRate = totalHours > 0 ? (totalPieces / totalHours) : 0;
+      const avgRate =
+      periodHours > 0
+        ? totalPieces / periodHours
+        : 0;
       const pctOfMeta = (avgRate / sec.meta) * 100;
 
       return {
@@ -343,7 +354,7 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
         excelPctOfMeta: pctOfMeta > 100 ? Math.min(pctOfMeta - 100, 50) : 0, // surplus bar
         realPctOfMeta: pctOfMeta,
         totalPieces,
-        totalHours
+        periodHours
       };
     });
   }, [dynamicChartActivities]);
@@ -1229,7 +1240,9 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
                   </div>
                   
                   <span className="text-[10px] text-slate-400 font-mono font-bold">
-                    {sec.totalHours > 0 ? `${sec.totalHours.toFixed(1)}h Ativas` : 'Nenhum Lançamento'}
+                    {sec.periodHours > 0
+                      ? `${sec.periodHours.toFixed(1)}h Período`
+                      : 'Nenhum Lançamento'}
                   </span>
                 </div>
               </div>
