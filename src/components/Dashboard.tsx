@@ -318,8 +318,8 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
 
   const dynamicSectorStats = useMemo(() => {
     const sectorsDef = [
-      { code: 1, label: 'Separação', meta: 1667 },
-      { code: 2, label: 'Armazenamento', meta: 1458 },
+      { code: 1, label: 'Separação', meta: 1458 },
+      { code: 2, label: 'Armazenamento', meta: 1388 },
       { code: 3, label: 'Remontar Picadeiras', meta: 42 }
     ];
 
