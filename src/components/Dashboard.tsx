@@ -85,9 +85,6 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
   // 'GERAL' | 1 | 2 | 3
   const [selectedActivityFilter, setSelectedActivityFilter] = useState<number | 'GERAL'>('GERAL');
 
-  // Sector Comparison Chart Period Filter ('7D' | '30D' | 'GERAL')
-  const [chartPeriodFilter, setChartPeriodFilter] = useState<'7D' | '30D' | 'GERAL'>('7D');
-
   // Trigger period updates quickly
   const handleQuickPeriodSelect = (period: string) => {
     const today = new Date();
@@ -290,32 +287,6 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
     });
   }, [sectorProductivityStats]);
 
-  // --- NEW: Sector Comparison Chart Calculations ---
-  const dynamicChartActivities = useMemo(() => {
-    let filtered = activities;
-    const today = new Date();
-    
-    if (chartPeriodFilter === '7D') {
-      const limit = new Date();
-      limit.setDate(today.getDate() - 7);
-      filtered = activities.filter(act => {
-        const d = parseDateString(act.date);
-        return d && d >= limit && d <= today;
-      });
-    } else if (chartPeriodFilter === '30D') {
-      const limit = new Date();
-      limit.setDate(today.getDate() - 30);
-      filtered = activities.filter(act => {
-        const d = parseDateString(act.date);
-        return d && d >= limit && d <= today;
-      });
-    } else {
-      // GERAL: Period filtered by the header
-      filtered = filteredActivities;
-    }
-    return filtered;
-  }, [activities, filteredActivities, chartPeriodFilter]);
-
   const dynamicSectorStats = useMemo(() => {
     const sectorsDef = [
       { code: 1, label: 'Separação', meta: 1458 },
@@ -324,7 +295,7 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
     ];
 
     return sectorsDef.map(sec => {
-      const records = dynamicChartActivities.filter(a => a.activityCode === sec.code && a.status === 'CONCLUIDO');
+      const records = filteredActivities.filter(a => a.activityCode === sec.code && a.status === 'CONCLUIDO');
       
       let totalPieces = 0;
 
@@ -357,7 +328,7 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
         periodHours
       };
     });
-  }, [dynamicChartActivities]);
+  }, [filteredActivities, startDate, endDate]);
 
   // --- 6. Master Table Ranking Board (VBA Multi-Sector indices) ---
   const leaderBoard = useMemo(() => {
@@ -1112,7 +1083,7 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
 
       {/* NEW SECTION: COMPARATIVO METRICAS DO SETOR */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs select-none" id="sector-comparison-chart-container">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-4 mb-5 gap-4">
+        <div className="border-b border-slate-100 pb-4 mb-5">
           <div>
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-5 w-5 text-blue-600" />
@@ -1124,42 +1095,6 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
               Ritmo de produtividade real comparado com as métricas padrão do setor em diferentes intervalos de tempo
             </p>
           </div>
-
-          {/* Period selector inside the chart */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-            <button
-              onClick={() => setChartPeriodFilter('7D')}
-              className={`px-3 py-1 text-[11px] font-bold rounded-md transition cursor-pointer ${
-                chartPeriodFilter === '7D'
-                  ? 'bg-white text-slate-800 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              1 Semana
-            </button>
-            <button
-              onClick={() => setChartPeriodFilter('30D')}
-              className={`px-3 py-1 text-[11px] font-bold rounded-md transition cursor-pointer ${
-                chartPeriodFilter === '30D'
-                  ? 'bg-white text-slate-800 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              1 Mês
-            </button>
-            <button
-              onClick={() => setChartPeriodFilter('GERAL')}
-              className={`px-3 py-1 text-[11px] font-bold rounded-md transition flex items-center gap-1 cursor-pointer ${
-                chartPeriodFilter === 'GERAL'
-                  ? 'bg-white text-slate-800 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <Calendar className="h-3 w-3" />
-              Filtro Geral (Cabeçalho)
-            </button>
-          </div>
-        </div>
 
         {/* COMPARATIVE BARS CONTAINER */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
