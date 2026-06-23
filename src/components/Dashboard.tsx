@@ -1095,6 +1095,7 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
               Ritmo de produtividade real comparado com as métricas padrão do setor em diferentes intervalos de tempo
             </p>
           </div>
+        </div>
 
         {/* COMPARATIVE BARS CONTAINER */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
