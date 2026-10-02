@@ -1,496 +1,714 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Activity as ActivityIcon,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  FileSpreadsheet,
+  Filter,
+  Layers,
+  PowerOff,
+  Search
+} from 'lucide-react';
+import {
+  dbFetchActivityHistoryPage,
+  dbFetchStoppageHistoryPage,
+  HistoryPageResult
+} from '../supabase';
 import { Activity, Stoppage } from '../types';
-import { Download, Search, FileSpreadsheet, Layers, PowerOff, Filter, Calendar, Trash2, Pencil } from 'lucide-react';
-//import { motion } from 'motion/react';
 
 interface HistoryLogsProps {
-  activities: Activity[];
-  stoppages: Stoppage[];
-  onClearLogs?: () => void;
-  
   onDeleteActivity?: (id: string) => void;
   onEditActivity?: (activity: Activity) => void;
-  
   onDeleteStoppage?: (id: string) => void;
   onEditStoppage?: (stoppage: Stoppage) => void;
   isAdmin?: boolean;
 }
 
-export default function HistoryLogs({ 
-  activities, 
-  stoppages, 
-  
-  onClearLogs,
-  
+type SheetTab = 'ACTIVITIES' | 'STOPPAGES';
+
+const PAGE_SIZE = 25;
+
+const ACTIVITY_OPTIONS = [
+  [1, '1 - Separação'],
+  [2, '2 - Armazenamento'],
+  [3, '3 - Remontar Picadeiras'],
+  [4, '4 - Trocar Strechs dos Pallets'],
+  [5, '5 - Movimentação'],
+  [6, '6 - Atualizar Etiquetas'],
+  [7, '7 - Endereçamento'],
+  [8, '8 - Empilhamento'],
+  [9, '9 - Liberando peças do Forno'],
+  [10, '10 - Inventário Rotativo'],
+  [11, '11 - Outros']
+] as const;
+
+const STOPPAGE_OPTIONS = [
+  [1, '1 - Banheiro/Água'],
+  [2, '2 - Trabalhando em outro setor'],
+  [3, '3 - Treinamento'],
+  [4, '4 - Reunião'],
+  [5, '5 - Limpeza do setor'],
+  [6, '6 - Auxiliando externo'],
+  [7, '7 - Inventário Pontual'],
+  [8, '8 - Equipamento instável'],
+  [9, '9 - Procurando Pallet'],
+  [10, '10 - Checklist'],
+  [11, '11 - Descarte quebra'],
+  [12, '12 - Auditoria'],
+  [13, '13 - Outros']
+] as const;
+
+function getTodayIsoDate(): string {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateForDisplay(date: string): string {
+  if (!date) return '-';
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) return date;
+
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+
+  return date;
+}
+
+function formatDateForFilename(date: string): string {
+  return date.replace(/-/g, '');
+}
+
+function escapeCsv(value: unknown): string {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+async function fetchAllActivities(
+  startDate: string,
+  endDate: string,
+  operator: string,
+  code?: number
+): Promise<Activity[]> {
+  const result: Activity[] = [];
+  let offset = 0;
+
+  while (true) {
+    const page = await dbFetchActivityHistoryPage({
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      operator,
+      code,
+      limit: 1000,
+      offset
+    });
+
+    if (!page) throw new Error('Não foi possível consultar o histórico de atividades.');
+
+    result.push(...page.items);
+    if (page.items.length < 1000) break;
+
+    offset += page.items.length;
+  }
+
+  return result;
+}
+
+async function fetchAllStoppages(
+  startDate: string,
+  endDate: string,
+  operator: string,
+  code?: number
+): Promise<Stoppage[]> {
+  const result: Stoppage[] = [];
+  let offset = 0;
+
+  while (true) {
+    const page = await dbFetchStoppageHistoryPage({
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      operator,
+      code,
+      limit: 1000,
+      offset
+    });
+
+    if (!page) throw new Error('Não foi possível consultar o histórico de paradas.');
+
+    result.push(...page.items);
+    if (page.items.length < 1000) break;
+
+    offset += page.items.length;
+  }
+
+  return result;
+}
+
+export default function HistoryLogs({
   onDeleteActivity,
   onEditActivity,
-  
   onDeleteStoppage,
   onEditStoppage,
-  
   isAdmin
 }: HistoryLogsProps) {
-  const [activeSheetTab, setActiveSheetTab] = useState<'ACTIVITIES' | 'STOPPAGES'>('ACTIVITIES');
+  const [activeSheetTab, setActiveSheetTab] = useState<SheetTab>('ACTIVITIES');
+  const [startDate, setStartDate] = useState(getTodayIsoDate);
+  const [endDate, setEndDate] = useState(getTodayIsoDate);
   const [operatorSearch, setOperatorSearch] = useState('');
-  const [dateSearch, setDateSearch] = useState('');
   const [codeFilter, setCodeFilter] = useState('ALL');
+  const [page, setPage] = useState(0);
 
-  // Unified list of unique operators across both datasets for easy dropdown selection if desired
-  const uniqueOperators = useMemo(() => {
-    const list = new Set<string>();
-    activities.forEach(a => list.add(a.operator));
-    stoppages.forEach(s => list.add(s.operator));
-    return Array.from(list).filter(Boolean);
-  }, [activities, stoppages]);
+  const [activitiesPage, setActivitiesPage] = useState<HistoryPageResult<Activity>>({
+    items: [],
+    totalCount: 0
+  });
+  const [stoppagesPage, setStoppagesPage] = useState<HistoryPageResult<Stoppage>>({
+    items: [],
+    totalCount: 0
+  });
 
-  // 1. Filtered Activities matching sheet_atividades.csv structure
-  const filteredActivities = useMemo(() => {
-    return activities.filter(act => {
-      const matchesOperator = act.operator.toLowerCase().includes(operatorSearch.toLowerCase());
-      const matchesDate = !dateSearch || act.date.includes(dateSearch) || act.date.split('-').reverse().join('/').includes(dateSearch);
-      const matchesCode = codeFilter === 'ALL' || act.activityCode.toString() === codeFilter;
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState('');
 
-      return matchesOperator && matchesDate && matchesCode;
-    }).sort((a, b) => b.id.localeCompare(a.id)); // sort by ID (usually date based)
-  }, [activities, operatorSearch, dateSearch, codeFilter]);
+  const selectedCode = codeFilter === 'ALL' ? undefined : Number(codeFilter);
+  const currentItems = activeSheetTab === 'ACTIVITIES'
+    ? activitiesPage.items
+    : stoppagesPage.items;
+  const totalCount = activeSheetTab === 'ACTIVITIES'
+    ? activitiesPage.totalCount
+    : stoppagesPage.totalCount;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
-  // 2. Filtered Stoppages matching sheet_produção.csv structure
-  const filteredStoppages = useMemo(() => {
-    return stoppages.filter(stop => {
-      const matchesOperator = stop.operator.toLowerCase().includes(operatorSearch.toLowerCase());
-      const matchesDate = !dateSearch || stop.date.includes(dateSearch) || stop.date.split('-').reverse().join('/').includes(dateSearch);
-      const matchesCode = codeFilter === 'ALL' || stop.stoppageCode.toString() === codeFilter;
+  const codeOptions = useMemo(
+    () => activeSheetTab === 'ACTIVITIES' ? ACTIVITY_OPTIONS : STOPPAGE_OPTIONS,
+    [activeSheetTab]
+  );
 
-      return matchesOperator && matchesDate && matchesCode;
-    }).sort((a, b) => b.id.localeCompare(a.id));
-  }, [stoppages, operatorSearch, dateSearch, codeFilter]);
-
-  // 3. Export to CSV client-side utility for Activities
-  const handleExportActivitiesCSV = () => {
-    if (filteredActivities.length === 0) return;
-
-    // Matches sheet_atividades.csv exactly:
-    const headers = [
-      'ID', 'Data', 'Colaborador', 'Código Atividade', 'Local', 'Lista', 
-      'Inicial', 'Final', 'Duração', 'Mov. Paleteira', 'Mov. Empilhadeira', 
-      'Qtd Peças', 'Qtd de Itens', 'Observação', 'Quem fez o lançamento:', 'Data de lançamento:'
-    ];
-
-    const rows = filteredActivities.map(act => [
-      act.id,
-      act.date,
-      act.operator,
-      act.activityCode,
-      act.local || 'N/A',
-      act.listId || 'N/A',
-      act.startTime,
-      act.endTime || '',
-      act.duration || '',
-      act.palletJackId || '',
-      act.forkliftId || '',
-      act.producedQuantity,
-      act.itemsQuantity,
-      act.notes || '',
-      act.creator || 'Sara',
-      act.createdAt || ''
-    ]);
-
-    const csvContent = [
-      headers.join(';'),
-      ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'))
-    ].join('\n');
-
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `sheet_atividades_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-
-    if (document.body.contains(link)) {
-      document.body.removeChild(link);
+  const validatePeriod = () => {
+    if (!startDate || !endDate) {
+      setError('Informe a data inicial e a data final.');
+      return false;
     }
 
-    URL.revokeObjectURL(url);
+    if (startDate > endDate) {
+      setError('A data inicial não pode ser maior que a data final.');
+      return false;
+    }
+
+    return true;
   };
 
-  // 4. Export to CSV client-side utility for Stoppages
-  const handleExportStoppagesCSV = () => {
-    if (filteredStoppages.length === 0) return;
+  const queryHistory = async (requestedPage = page) => {
+    if (!validatePeriod()) return;
 
-    // Matches sheet_produção.csv exactly:
-    const headers = [
-      'ID', 'Data', 'Colaborador', 'Nº parada', 'Inicial', 'Final', 'Duração', 'Observação', 'Quem fez o lançamento:', 'Data de lançamento:'
-    ];
+    setLoading(true);
+    setError('');
 
-    const rows = filteredStoppages.map(stop => [
-      stop.id,
-      stop.date,
-      stop.operator,
-      stop.stoppageCode,
-      stop.startTime,
-      stop.endTime || '',
-      stop.duration || '',
-      stop.notes || '',
-      stop.creator || 'Sara',
-      stop.createdAt || ''
-    ]);
+    try {
+      const offset = requestedPage * PAGE_SIZE;
 
-    const csvContent = [
-      headers.join(';'),
-      ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'))
-    ].join('\n');
+      if (activeSheetTab === 'ACTIVITIES') {
+        const result = await dbFetchActivityHistoryPage({
+          startDate,
+          endDate,
+          operator: operatorSearch,
+          code: selectedCode,
+          limit: PAGE_SIZE,
+          offset
+        });
 
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `sheet_producao_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
+        if (!result) throw new Error('Não foi possível consultar o histórico de atividades.');
+        setActivitiesPage(result);
+      } else {
+        const result = await dbFetchStoppageHistoryPage({
+          startDate,
+          endDate,
+          operator: operatorSearch,
+          code: selectedCode,
+          limit: PAGE_SIZE,
+          offset
+        });
 
-    if (document.body.contains(link)) {
-      document.body.removeChild(link);
+        if (!result) throw new Error('Não foi possível consultar o histórico de paradas.');
+        setStoppagesPage(result);
+      }
+
+      setPage(requestedPage);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Erro ao consultar o histórico.');
+    } finally {
+      setLoading(false);
     }
+  };
 
-    URL.revokeObjectURL(url);
+  useEffect(() => {
+    void queryHistory(0);
+    // A aba inicia a consulta do período atual.
+    // Filtros só são aplicados ao clicar em Consultar período.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSheetTab]);
+
+  const handleToday = () => {
+    const today = getTodayIsoDate();
+    setStartDate(today);
+    setEndDate(today);
+    setPage(0);
+  };
+
+  const handleExport = async () => {
+    if (!validatePeriod()) return;
+
+    setExporting(true);
+    setError('');
+
+    try {
+      if (activeSheetTab === 'ACTIVITIES') {
+        const rows = await fetchAllActivities(startDate, endDate, operatorSearch, selectedCode);
+
+        if (rows.length === 0) {
+          setError('Nenhuma atividade encontrada para exportação.');
+          return;
+        }
+
+        const headers = [
+          'ID',
+          'Data',
+          'Colaborador',
+          'Código Atividade',
+          'Local',
+          'Lista',
+          'Inicial',
+          'Final',
+          'Duração',
+          'Mov. Paleteira',
+          'Mov. Empilhadeira',
+          'Qtd Peças',
+          'Qtd de Itens',
+          'Observação',
+          'Quem fez o lançamento',
+          'Data de lançamento'
+        ];
+
+        const csv = [
+          headers.join(';'),
+          ...rows.map(act => [
+            act.id,
+            act.date,
+            act.operator,
+            act.activityCode,
+            act.local,
+            act.listId,
+            act.startTime,
+            act.endTime || '',
+            act.duration,
+            act.palletJackId || '',
+            act.forkliftId || '',
+            act.producedQuantity,
+            act.itemsQuantity,
+            act.notes || '',
+            act.creator,
+            act.createdAt
+          ].map(escapeCsv).join(';'))
+        ].join('\n');
+
+        const blob = new Blob(
+          [new Uint8Array([0xEF, 0xBB, 0xBF]), csv],
+          { type: 'text/csv;charset=utf-8;' }
+        );
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `historico_atividades_${formatDateForFilename(startDate)}_${formatDateForFilename(endDate)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } else {
+        const rows = await fetchAllStoppages(startDate, endDate, operatorSearch, selectedCode);
+
+        if (rows.length === 0) {
+          setError('Nenhuma parada encontrada para exportação.');
+          return;
+        }
+
+        const headers = [
+          'ID',
+          'Data',
+          'Colaborador',
+          'Nº Parada',
+          'Inicial',
+          'Final',
+          'Duração',
+          'Observação',
+          'Quem fez o lançamento',
+          'Data de lançamento'
+        ];
+
+        const csv = [
+          headers.join(';'),
+          ...rows.map(stop => [
+            stop.id,
+            stop.date,
+            stop.operator,
+            stop.stoppageCode,
+            stop.startTime,
+            stop.endTime || '',
+            stop.duration,
+            stop.notes || '',
+            stop.creator,
+            stop.createdAt
+          ].map(escapeCsv).join(';'))
+        ].join('\n');
+
+        const blob = new Blob(
+          [new Uint8Array([0xEF, 0xBB, 0xBF]), csv],
+          { type: 'text/csv;charset=utf-8;' }
+        );
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `historico_paradas_${formatDateForFilename(startDate)}_${formatDateForFilename(endDate)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Não foi possível exportar o histórico.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleTabChange = (tab: SheetTab) => {
+    setActiveSheetTab(tab);
+    setCodeFilter('ALL');
+    setPage(0);
+  };
+
+  const goToPage = (nextPage: number) => {
+    if (nextPage < 0 || nextPage >= totalPages || loading) return;
+    void queryHistory(nextPage);
   };
 
   return (
     <div className="space-y-6" id="history-sheets-view">
-      {/* 1. Header with Sheet Toggles & CSV Export Options */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white border border-slate-200 p-6 rounded-xl shadow-sm gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">Visualização de Planilhas Porto Brasil</h2>
-          <p className="text-sm text-slate-400 mt-1">Veja seus lançamentos nos mesmos modelos das planilhas integradas e faça a exportação para o Excel</p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          {activeSheetTab === 'ACTIVITIES' ? (
-            <button
-              onClick={handleExportActivitiesCSV}
-              disabled={filteredActivities.length === 0}
-              id="export-activities-sheet-btn"
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-400 text-white font-semibold py-2 px-4 rounded-xl text-xs sm:text-sm transition flex items-center space-x-2 cursor-pointer shadow-sm"
-            >
-              <Download className="h-4 w-4" />
-              <span>Exportar Atividades ({filteredActivities.length})</span>
-            </button>
-          ) : (
-            <button
-              onClick={handleExportStoppagesCSV}
-              disabled={filteredStoppages.length === 0}
-              id="export-stoppages-sheet-btn"
-              className="bg-red-600 hover:bg-red-700 disabled:bg-slate-100 disabled:text-slate-400 text-white font-semibold py-2 px-4 rounded-xl text-xs sm:text-sm transition flex items-center space-x-2 cursor-pointer shadow-sm"
-            >
-              <Download className="h-4 w-4" />
-              <span>Exportar Paradas ({filteredStoppages.length})</span>
-            </button>
-          )}
+      <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800">Histórico de Movimentações</h2>
+            <p className="text-sm text-slate-400 mt-1">
+              Consulte atividades e paradas por período sem carregar todo o histórico para o navegador.
+            </p>
+          </div>
 
-          {onClearLogs && (
+          <div className="flex flex-wrap gap-2">
             <button
-              onClick={onClearLogs}
-              id="clear-all-registers-btn"
-              className="bg-slate-50 hover:bg-red-50 hover:text-red-600 font-semibold py-2 px-4 rounded-xl text-xs border border-slate-200 transition cursor-pointer"
-              title="Limpar todos os registros e logs do terminal"
+              onClick={handleExport}
+              disabled={exporting || loading}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold py-2.5 px-4 rounded-xl text-xs transition flex items-center gap-2"
             >
-              Limpar Lançamentos
+              <Download className="h-4 w-4" />
+              {exporting ? 'Exportando...' : 'Exportar Histórico'}
             </button>
-          )}
+          </div>
         </div>
+
+        <div className="mt-5 bg-slate-50 border border-slate-200 p-4 rounded-xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 items-end">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                De
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                Até
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <button
+              onClick={handleToday}
+              className="h-10 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-lg text-xs"
+            >
+              Hoje
+            </button>
+
+            <button
+              onClick={() => void queryHistory(0)}
+              disabled={loading}
+              className="h-10 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-2"
+            >
+              <Search className="w-4 h-4" />
+              {loading ? 'Consultando...' : 'Consultar Período'}
+            </button>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                Colaborador
+              </label>
+              <input
+                type="text"
+                value={operatorSearch}
+                onChange={e => setOperatorSearch(e.target.value)}
+                placeholder="Ex.: Luis"
+                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                {activeSheetTab === 'ACTIVITIES' ? 'Código da Atividade' : 'Nº da Parada'}
+              </label>
+              <select
+                value={codeFilter}
+                onChange={e => setCodeFilter(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+              >
+                <option value="ALL">Todos</option>
+                {codeOptions.map(([code, label]) => (
+                  <option key={code} value={code}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="md:col-span-2 flex items-end text-xs text-slate-400">
+              <span>
+                A consulta usa a data operacional do lançamento. Nenhuma conversão de fuso horário é aplicada à data histórica.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-4 py-3 text-xs font-semibold">
+            {error}
+          </div>
+        )}
       </div>
 
-      {/* 2. Spreadsheet Selector Tabs */}
       <div className="flex border-b border-slate-200 select-none">
         <button
-          onClick={() => {
-            setActiveSheetTab('ACTIVITIES');
-            setCodeFilter('ALL');
-          }}
-          className={`px-5 py-3.5 text-sm font-bold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
+          onClick={() => handleTabChange('ACTIVITIES')}
+          className={`px-5 py-3.5 text-sm font-bold border-b-2 flex items-center gap-2 transition ${
             activeSheetTab === 'ACTIVITIES'
-              ? 'border-emerald-600 text-emerald-700 bg-emerald-50/10'
+              ? 'border-emerald-600 text-emerald-700'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>Planilha de Atividades (sheet_atividades)</span>
+          Atividades
         </button>
+
         <button
-          onClick={() => {
-            setActiveSheetTab('STOPPAGES');
-            setCodeFilter('ALL');
-          }}
-          className={`px-5 py-3.5 text-sm font-bold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
+          onClick={() => handleTabChange('STOPPAGES')}
+          className={`px-5 py-3.5 text-sm font-bold border-b-2 flex items-center gap-2 transition ${
             activeSheetTab === 'STOPPAGES'
-              ? 'border-red-600 text-red-700 bg-red-50/10'
+              ? 'border-red-600 text-red-700'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <PowerOff className="w-4 h-4" />
-          <span>Planilha de Paradas (sheet_producao)</span>
+          Paradas
         </button>
       </div>
 
-      {/* 3. High Performance Row Query Filters */}
-      <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4" id="sheets-filter-box">
-        {/* Operator Search Input */}
-        <div className="space-y-1.5Col">
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-            <Search className="w-3.5 h-3.5 text-slate-400" />
-            <span>Colaborador / Operador</span>
-          </label>
-          <input
-            type="text"
-            placeholder="Pesquisar por nome do colaborador..."
-            value={operatorSearch}
-            onChange={(e) => setOperatorSearch(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-slate-700 text-sm focus:border-blue-500 outline-hidden"
-          />
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {activeSheetTab === 'ACTIVITIES'
+              ? <ActivityIcon className="w-4 h-4 text-emerald-600" />
+              : <PowerOff className="w-4 h-4 text-red-600" />}
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              {activeSheetTab === 'ACTIVITIES' ? 'Histórico de Atividades' : 'Histórico de Paradas'}
+            </span>
+          </div>
+
+          <span className="text-xs font-mono text-slate-500">
+            {totalCount.toLocaleString('pt-BR')} registros
+          </span>
         </div>
 
-        {/* Date Search Input */}
-        <div className="space-y-1.5">
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <span>Data</span>
-          </label>
-          <input
-            type="text"
-            placeholder="Ex: 06/06/2026..."
-            value={dateSearch}
-            onChange={(e) => setDateSearch(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-slate-700 text-sm focus:border-blue-500 outline-hidden font-mono"
-          />
-        </div>
-
-        {/* Code Filter Selection */}
-        <div className="space-y-1.5">
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
-            <span>{activeSheetTab === 'ACTIVITIES' ? 'Código Atividade' : 'Nº Parada'}</span>
-          </label>
-          <select
-            value={codeFilter}
-            onChange={(e) => setCodeFilter(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-slate-700 text-sm focus:border-blue-500 outline-hidden"
-          >
-            <option value="ALL">Mostrar Todos</option>
-            {activeSheetTab === 'ACTIVITIES' ? (
-              <>
-                <option value="1">1 - Separação</option>
-                <option value="2">2 - Armazenamento</option>
-                <option value="3">3 - Remontar Picadeiras</option>
-                <option value="4">4 - Trocar Strechs dos Pallets</option>
-                <option value="5">5 - Movimentação</option>
-                <option value="6">6 - Atualizar Etiquetas</option>
-                <option value="7">7 - Endereçamento</option>
-                <option value="8">8 - Empilhamento</option>
-                <option value="9">9 - Liberando peças do Forno</option>
-                <option value="10">10 - Inventário Rotativo</option>
-                <option value="11">11 - Outros</option>
-              </>
-            ) : (
-              <>
-                <option value="1">1 - Banheiro/Água</option>
-                <option value="2">2 - Trabalhando em outro setor</option>
-                <option value="3">3 - Treinamento</option>
-                <option value="4">4 - Reunião</option>
-                <option value="5">5 - Limpeza do setor</option>
-                <option value="6">6 - Auxiliando externo</option>
-                <option value="7">7 - Inventário Pontual</option>
-                <option value="8">8 - Equipamento instável</option>
-                <option value="9">9 - Procurando Pallet</option>
-                <option value="10">10 - Checklist</option>
-                <option value="11">11 - Descarte quebra</option>
-                <option value="12">12 - Auditoria</option>
-                <option value="13">13 - Outros</option>
-              </>
-            )}
-          </select>
-        </div>
-      </div>
-
-      {/* 4. Tabular Interactive Sheet Tables */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm overflow-hidden" id="sheet-table-box">
-        {activeSheetTab === 'ACTIVITIES' ? (
-          <div>
-            <div className="flex justify-between items-center mb-4 select-none">
-              <span className="text-xs font-bold font-mono text-emerald-600 bg-emerald-50 border border-emerald-100 px-3 py-1 rounded-md uppercase">
-                Planilha Atividades: {filteredActivities.length} linhas filtradas
-              </span>
-              <span className="text-xs text-slate-400 font-medium">Modelo: sheet_atividades.csv</span>
-            </div>
-
-            {filteredActivities.length === 0 ? (
-              <div className="py-12 border border-dashed border-slate-200 rounded-xl text-center text-slate-400 text-sm">
-                Nenhuma atividade encontrada com os filtros selecionados. Efetue novos lançamentos para visualizar aqui.
-              </div>
-            ) : (
-              <div className="overflow-x-auto overflow-y-auto max-h-[650px]">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="sticky top-0 z-10 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider select-none bg-slate-50">
-                      <th className="py-3 px-4 text-center">Data</th>
-                      <th className="py-3 px-4">Colaborador</th>
-                      <th className="py-3 px-4 text-center">Cód Act</th>
-                      <th className="py-3 px-4">Local</th>
-                      <th className="py-3 px-4">Lista</th>
-                      <th className="py-3 px-4 text-center">Início</th>
-                      <th className="py-3 px-4 text-center">Fim</th>
-                      <th className="py-3 px-4 text-center">Duração</th>
-                      <th className="py-3 px-4 text-center">Mov.Paleteira</th>
-                      <th className="py-3 px-4 text-center">Mov.Empilhadeira</th>
-                      <th className="py-3 px-4 text-right">Qtd Pçs</th>
-                      <th className="py-3 px-4 text-right">Qtd Itens</th>
-                      <th className="py-3 px-4">Observação</th>
-                      <th className="py-3 px-4">Lançador</th>
-                      <th className="py-3 px-4">Data Lançamento</th>
-                      {isAdmin && <th className="py-3 px-4 text-center w-16">Ação</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700 font-sans">
-                    {filteredActivities.map((act) => (
-                      <tr key={act.id} className="hover:bg-slate-50/60 font-medium">
-                        <td className="py-3 px-4 text-center whitespace-nowrap font-mono text-slate-600">{act.date}</td>
-                        <td className="py-3 px-4 text-slate-900 font-bold">{act.operator}</td>
-                        <td className="py-3 px-4 text-center font-mono">
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-bold font-mono">
-                            {act.activityCode}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-600 font-mono">{act.local || 'N/A'}</td>
-                        <td className="py-3 px-4 text-slate-600 font-mono">{act.listId || 'N/A'}</td>
-                        <td className="py-3 px-4 text-center font-mono">{act.startTime}</td>
-                        <td className="py-3 px-4 text-center font-mono">{act.endTime || '-'}</td>
-                        <td className="py-3 px-4 text-center font-mono font-bold text-slate-800 bg-slate-50/30 whitespace-nowrap">{act.duration}</td>
-                        <td className="py-3 px-4 text-center font-mono">{act.palletJackId || '-'}</td>
-                        <td className="py-3 px-4 text-center font-mono">{act.forkliftId || '-'}</td>
-                        <td className="py-3 px-4 text-right font-mono text-slate-900 font-bold">{act.producedQuantity.toLocaleString('pt-BR')}</td>
-                        <td className="py-3 px-4 text-right font-mono text-slate-900 font-bold">{act.itemsQuantity.toLocaleString('pt-BR')}</td>
-                        <td className="py-3 px-4 text-slate-500 italic max-w-sm truncate" title={act.notes}>{act.notes || '-'}</td>
-                        <td className="py-3 px-4 text-slate-600 font-semibold">{act.creator || 'Sara'}</td>
-                        <td className="py-3 px-4 text-slate-500 font-mono whitespace-nowrap">{act.createdAt || '-'}</td>
-                        {isAdmin && (
-                          <td className="py-2 px-4 text-center">
-                        
-                            <div className="flex items-center justify-center gap-2">
-                        
-                              <button
-                                onClick={() => onEditActivity?.(act)}
-                                className="p-1 text-blue-500 hover:bg-blue-50 rounded-md hover:text-blue-700 transition cursor-pointer inline-flex items-center justify-center"
-                                title="Editar Registro"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                        
-                              <button
-                                onClick={() => {
-                                  if (window.confirm('Excluir este registro permanentemente de Atividades?')) {
-                                    onDeleteActivity?.(act.id);
-                                  }
-                                }}
-                                className="p-1 text-red-500 hover:bg-rose-50 rounded-md hover:text-red-700 transition cursor-pointer inline-flex items-center justify-center"
-                                title="Excluir Registro"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                        
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+        {loading ? (
+          <div className="py-16 text-center text-sm text-slate-400">
+            Consultando o período no banco de dados...
+          </div>
+        ) : currentItems.length === 0 ? (
+          <div className="py-16 text-center text-sm text-slate-400">
+            Nenhum registro encontrado para os filtros selecionados.
+          </div>
+        ) : activeSheetTab === 'ACTIVITIES' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">
+                  <th className="py-3 px-4 text-center">Data</th>
+                  <th className="py-3 px-4">Colaborador</th>
+                  <th className="py-3 px-4 text-center">Cód.</th>
+                  <th className="py-3 px-4">Local</th>
+                  <th className="py-3 px-4">Lista</th>
+                  <th className="py-3 px-4 text-center">Início</th>
+                  <th className="py-3 px-4 text-center">Fim</th>
+                  <th className="py-3 px-4 text-center">Duração</th>
+                  <th className="py-3 px-4 text-right">Pçs</th>
+                  <th className="py-3 px-4 text-right">Itens</th>
+                  <th className="py-3 px-4">Lançador</th>
+                  {isAdmin && <th className="py-3 px-4 text-center">Ação</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {activitiesPage.items.map(act => (
+                  <tr key={act.id} className="hover:bg-slate-50/60">
+                    <td className="py-3 px-4 text-center whitespace-nowrap font-mono">{formatDateForDisplay(act.date)}</td>
+                    <td className="py-3 px-4 font-bold text-slate-900">{act.operator}</td>
+                    <td className="py-3 px-4 text-center font-mono">{act.activityCode}</td>
+                    <td className="py-3 px-4 font-mono">{act.local || '-'}</td>
+                    <td className="py-3 px-4 font-mono">{act.listId || '-'}</td>
+                    <td className="py-3 px-4 text-center font-mono">{act.startTime}</td>
+                    <td className="py-3 px-4 text-center font-mono">{act.endTime || '-'}</td>
+                    <td className="py-3 px-4 text-center font-mono font-bold">{act.duration}</td>
+                    <td className="py-3 px-4 text-right font-mono font-bold">{act.producedQuantity.toLocaleString('pt-BR')}</td>
+                    <td className="py-3 px-4 text-right font-mono font-bold">{act.itemsQuantity.toLocaleString('pt-BR')}</td>
+                    <td className="py-3 px-4">{act.creator}</td>
+                    {isAdmin && (
+                      <td className="py-2 px-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => onEditActivity?.(act)}
+                            className="p-1 text-blue-500 hover:bg-blue-50 rounded-md"
+                            title="Editar Registro"
+                          >
+                            <span className="text-[10px] font-bold">EDIT</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm('Excluir este registro permanentemente de Atividades?')) {
+                                onDeleteActivity?.(act.id);
+                              }
+                            }}
+                            className="p-1 text-red-500 hover:bg-rose-50 rounded-md"
+                            title="Excluir Registro"
+                          >
+                            <span className="text-[10px] font-bold">DEL</span>
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
-          <div>
-            <div className="flex justify-between items-center mb-4 select-none">
-              <span className="text-xs font-bold font-mono text-red-600 bg-red-50 border border-red-100 px-3 py-1 rounded-md uppercase">
-                Planilha Paradas: {filteredStoppages.length} linhas filtradas
-              </span>
-              <span className="text-xs text-slate-400 font-medium">Modelo: sheet_producao.csv</span>
-            </div>
-
-            {filteredStoppages.length === 0 ? (
-              <div className="py-12 border border-dashed border-slate-200 rounded-xl text-center text-slate-400 text-sm">
-                Nenhuma parada encontrada com os filtros selecionados.
-              </div>
-            ) : (
-              <div className="overflow-x-auto overflow-y-auto max-h-[650px]">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="sticky top-0 z-10 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider select-none bg-slate-50">
-                      <th className="py-3 px-4 text-center">Data</th>
-                      <th className="py-3 px-4">Colaborador</th>
-                      <th className="py-3 px-4 text-center">Nº Parada</th>
-                      <th className="py-3 px-4 text-center">Início</th>
-                      <th className="py-3 px-4 text-center">Fim</th>
-                      <th className="py-3 px-4 text-center">Duração</th>
-                      <th className="py-3 px-4">Observação</th>
-                      <th className="py-3 px-4">Lançador</th>
-                      <th className="py-3 px-4">Data Lançamento</th>
-                      {isAdmin && <th className="py-3 px-4 text-center w-16">Ação</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700 font-sans">
-                    {filteredStoppages.map((stop) => (
-                      <tr key={stop.id} className="hover:bg-slate-50/60 font-medium">
-                        <td className="py-3 px-4 text-center whitespace-nowrap font-mono text-slate-600">{stop.date}</td>
-                        <td className="py-3 px-4 text-slate-900 font-bold">{stop.operator}</td>
-                        <td className="py-3 px-4 text-center font-mono">
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-bold font-mono">
-                            {stop.stoppageCode}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center font-mono">{stop.startTime}</td>
-                        <td className="py-3 px-4 text-center font-mono">{stop.endTime || '-'}</td>
-                        <td className="py-3 px-4 text-center font-mono font-bold text-slate-800 bg-slate-50/30 whitespace-nowrap">{stop.duration}</td>
-                        <td className="py-3 px-4 text-slate-500 italic max-w-sm truncate" title={stop.notes}>{stop.notes || '-'}</td>
-                        <td className="py-3 px-4 text-slate-600 font-semibold">{stop.creator || 'Sara'}</td>
-                        <td className="py-3 px-4 text-slate-500 font-mono whitespace-nowrap">{stop.createdAt || '-'}</td>
-                        {isAdmin && (
-                          <td className="py-2 px-4 text-center">
-                        
-                            <div className="flex items-center justify-center gap-2">
-                        
-                              <button
-                                onClick={() => onEditStoppage?.(stop)}
-                                className="p-1 text-blue-500 hover:bg-blue-50 rounded-md hover:text-blue-700 transition cursor-pointer inline-flex items-center justify-center"
-                                title="Editar Registro"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                        
-                              <button
-                                onClick={() => {
-                                  if (window.confirm('Excluir este registro permanentemente de Paradas?')) {
-                                    onDeleteStoppage?.(stop.id);
-                                  }
-                                }}
-                                className="p-1 text-red-500 hover:bg-rose-50 rounded-md hover:text-red-700 transition cursor-pointer inline-flex items-center justify-center"
-                                title="Excluir Registro"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                        
-                            </div>
-                        
-                          </td>
-                        )}
-                        
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">
+                  <th className="py-3 px-4 text-center">Data</th>
+                  <th className="py-3 px-4">Colaborador</th>
+                  <th className="py-3 px-4 text-center">Nº</th>
+                  <th className="py-3 px-4 text-center">Início</th>
+                  <th className="py-3 px-4 text-center">Fim</th>
+                  <th className="py-3 px-4 text-center">Duração</th>
+                  <th className="py-3 px-4">Observação</th>
+                  <th className="py-3 px-4">Lançador</th>
+                  {isAdmin && <th className="py-3 px-4 text-center">Ação</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {stoppagesPage.items.map(stop => (
+                  <tr key={stop.id} className="hover:bg-slate-50/60">
+                    <td className="py-3 px-4 text-center whitespace-nowrap font-mono">{formatDateForDisplay(stop.date)}</td>
+                    <td className="py-3 px-4 font-bold text-slate-900">{stop.operator}</td>
+                    <td className="py-3 px-4 text-center font-mono">{stop.stoppageCode}</td>
+                    <td className="py-3 px-4 text-center font-mono">{stop.startTime}</td>
+                    <td className="py-3 px-4 text-center font-mono">{stop.endTime || '-'}</td>
+                    <td className="py-3 px-4 text-center font-mono font-bold">{stop.duration}</td>
+                    <td className="py-3 px-4 max-w-sm truncate" title={stop.notes}>{stop.notes || '-'}</td>
+                    <td className="py-3 px-4">{stop.creator}</td>
+                    {isAdmin && (
+                      <td className="py-2 px-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => onEditStoppage?.(stop)}
+                            className="p-1 text-blue-500 hover:bg-blue-50 rounded-md"
+                            title="Editar Registro"
+                          >
+                            <span className="text-[10px] font-bold">EDIT</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm('Excluir este registro permanentemente de Paradas?')) {
+                                onDeleteStoppage?.(stop.id);
+                              }
+                            }}
+                            className="p-1 text-red-500 hover:bg-rose-50 rounded-md"
+                            title="Excluir Registro"
+                          >
+                            <span className="text-[10px] font-bold">DEL</span>
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
+
+        {totalPages > 1 && (
+          <div className="px-5 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50">
+            <span className="text-xs text-slate-500">
+              Página {page + 1} de {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => goToPage(page - 1)}
+                disabled={page === 0 || loading}
+                className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
+                title="Página anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => goToPage(page + 1)}
+                disabled={page + 1 >= totalPages || loading}
+                className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
+                title="Próxima página"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="text-[10px] text-slate-400 flex items-center gap-2">
+        <FileSpreadsheet className="w-3.5 h-3.5" />
+        <Filter className="w-3.5 h-3.5" />
+        <Calendar className="w-3.5 h-3.5" />
+        Consulta paginada diretamente no Supabase. Exportação é feita somente quando solicitada.
       </div>
     </div>
   );

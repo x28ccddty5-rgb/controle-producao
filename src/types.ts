@@ -42,27 +42,9 @@ export interface Stoppage {
 export interface ProductionLog {
   id: string;
   timestamp: string;
-  type: 'ATIVIDADE_INICIO' | 'ATIVIDADE_FIM' | 'ATIVIDADE_ATUALIZACAO' | 'PARADA_INICIO' | 'PARADA_FIM';
+  type: 'ATIVIDADE_INICIO' | 'ATIVIDADE' | 'ATIVIDADE_FIM' | 'ATIVIDADE_ATUALIZACAO' | 'PARADA_INICIO' | 'PARADA' | 'PARADA_ATUALIZACAO' | 'PARADA_FIM';
   description: string;
   operator: string;
   referenceId: string; // ID of the Activity or Stoppage
 }
-
-export interface CustomUser {
-  id?: string;
-
-  username: string;
-  name: string;
-  password: string;
-
-  role:
-    | 'admin'
-    | 'supervisor'
-    | 'producao'
-    | 'visualizador';
-
-  created_at?: string;
-  updated_at?: string;
-}
-
 

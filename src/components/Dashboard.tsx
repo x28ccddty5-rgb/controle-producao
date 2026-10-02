@@ -27,6 +27,7 @@ interface DashboardProps {
   activities: Activity[];
   stoppages: Stoppage[];
   onQuickResolveStoppage: (stoppageId: string) => void;
+  onRefreshData: () => Promise<void>;
 }
 
 // Convert hours and minutes from decimal to "HHH:MM" format
@@ -40,16 +41,22 @@ function formatMinutesToHoursColon(minutes: number) {
 }
 
 // Helper to parse date representation from "DD/MM/YYYY" or "YYYY-MM-DD" to standard Date object
-function parseDateString(str: string): Date | null {
+function normalizeOperationalDate(str: string): string | null {
   if (!str) return null;
-  if (str.includes('/')) {
-    const [day, month, year] = str.split('/').map(Number);
-    return new Date(year, month - 1, day);
+
+  const trimmed = str.trim();
+
+  const brMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (brMatch) {
+    const [, day, month, year] = brMatch;
+    return `${year}-${month}-${day}`;
   }
-  if (str.includes('-')) {
-    const [year, month, day] = str.split('-').map(Number);
-    return new Date(year, month - 1, day);
+
+  const isoMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) {
+    return isoMatch[1];
   }
+
   return null;
 }
 
@@ -62,7 +69,12 @@ function getProductivityClass(indexVal: number): { label: string; bg: string; te
   return { label: 'BAIXA PROD.', bg: 'bg-red-500/10', text: 'text-red-500', border: 'border-red-500/20', barBg: 'bg-red-500' };
 }
 
-export default function Dashboard({ activities, stoppages, onQuickResolveStoppage }: DashboardProps) {
+export default function Dashboard({
+  activities,
+  stoppages,
+  onQuickResolveStoppage,
+  onRefreshData
+}: DashboardProps) {
   // --- 1. Date Interval Period State ---
   const [startDate, setStartDate] = useState(() => {
     // Default to '2026-06-01' during demo or start of month
@@ -140,12 +152,10 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
 
   // Check if string date matches the defined interval
   const isWithinPeriod = (dateStr: string) => {
-    const recordDate = parseDateString(dateStr);
-    if (!recordDate) return true;
-    
-    const start = new Date(startDate + 'T00:00:00');
-    const end = new Date(endDate + 'T23:59:59');
-    return recordDate >= start && recordDate <= end;
+    const recordDate = normalizeOperationalDate(dateStr);
+    if (!recordDate) return false;
+
+    return recordDate >= startDate && recordDate <= endDate;
   };
 
   // Intermediary filtered collections
@@ -530,8 +540,9 @@ export default function Dashboard({ activities, stoppages, onQuickResolveStoppag
             />
           </div>
 
-          <button 
+          <button
             type="button"
+            onClick={() => void onRefreshData()}
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg transition text-xs shrink-0 cursor-pointer shadow-xs uppercase tracking-wide"
           >
             Atualizar Dados

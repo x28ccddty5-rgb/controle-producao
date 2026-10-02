@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Activity, Stoppage, ProductionLog, ActivityStatus, CustomUser } from './types';
+import { Activity, Stoppage, ProductionLog, ActivityStatus } from './types';
 import { 
   INITIAL_ACTIVITIES, 
   INITIAL_STOPPAGES, 
@@ -9,12 +9,11 @@ import {
   isSupabaseConfigured,
 
   dbFetchActivities,
+  dbFetchActiveActivities,
   dbFetchStoppages,
-  dbFetchLogs,
+  dbFetchActiveStoppages,
+  dbFetchCollaborators,
 
-  dbFetchUsers,
-  dbSaveUser,
-  dbDeleteUser,
 
   dbFetchActivityTypes,
   dbSaveActivityType,
@@ -31,13 +30,16 @@ import {
   dbDeleteActivity,
   dbDeleteStoppage,
 
-  dbClearLogs
+  dbSaveCollaborator,
+  dbDeactivateCollaborator,
+  supabase
 } from './supabase';
 import Dashboard from './components/Dashboard';
 import ActivityManagement from './components/ActivityManagement';
 import StoppageManagement from './components/StoppageManagement';
 import HistoryLogs from './components/HistoryLogs';
 import AdminPanel from './components/AdminPanel';
+import AdminUsersManagement, { ManagedUser, NewUserPayload } from './components/AdminUsersManagement';
 import ProductionBatch from './components/ProductionBatch';
 import { 
   Gauge, 
@@ -52,7 +54,8 @@ import {
   CheckCircle2,
   Lock,
   Unlock,
-  User
+  User,
+  Users
 } from 'lucide-react';
 // import { motion, AnimatePresence } from 'motion/react';
 
@@ -62,12 +65,6 @@ const STORAGE_KEYS = {
   LOGS: 'production_logs_v2'
 };
 
-const DEFAULT_USERS: CustomUser[] = [
-  { username: 'producao', name: 'Sara', password: '1234', role: 'producao' },
-  { username: 'lideranca', name: 'Jonas', password: 'ADM2026', role: 'lideranca' },
-  { username: 'adm', name: 'Matheus', password: 'math2308', role: 'adm' },
-  { username: 'visualizador', name: 'Visualizador', password: '2026', role: 'visualizador' }
-];
 
 function parseTimeToHours(timeStr: string): number {
   if (!timeStr) return 0;
@@ -99,36 +96,6 @@ export default function App() {
   
   const [isInitializing, setIsInitializing] = useState(true);
 
-  // Dynamic user list
- const [usersList, setUsersList] =
-  useState<CustomUser[]>([]);
-
-  const loadUsers = async () => {
-  try {
-
-    const users = await dbFetchUsers();
-
-    if (users) {
-
-      setUsersList(users);
-
-      return;
-    }
-
-  } catch (err) {
-    console.error(err);
-  }
-
-  const fallback =
-    localStorage.getItem(
-      'porto_custom_users_v2'
-    );
-
-  if (fallback) {
-    setUsersList(JSON.parse(fallback));
-  }
-};
-
   const loadActivityTypes = async () => {
 
   const data = await dbFetchActivityTypes();
@@ -158,16 +125,7 @@ const loadStoppageTypes = async () => {
 };
   
   // Dynamic lists states for ADM management
-  const [collaborators, setCollaborators] = useState<string[]>(() => {
-    const saved = localStorage.getItem('porto_collaborators');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {}
-    }
-    return ['Sara', 'Carlos', 'Marcos', 'João', 'Rafael', 'Luan', 'Karl', 'Luis', 'Daniel'];
-  });
+  const [collaborators, setCollaborators] = useState<string[]>([]);
 
   const [activitiesList, setActivitiesList] = useState<
   { code: number; label: string }[]
@@ -183,184 +141,251 @@ const loadStoppageTypes = async () => {
     return localStorage.getItem('porto_global_creator') || 'Sara';
   });
 
-  // Application Authentication Sessions (3 roles: producao / supervisor / visualizador)
-  const [sessionUser, setSessionUser] = useState<'producao' | 'visualizador' | 'lideranca' | 'adm' |null>(() => {
-    return (sessionStorage.getItem('porto_session_user') as 'producao' | 'visualizador' | 'lideranca' | 'adm') || null;
-  });
+  // --- AUTENTICAÇÃO SUPABASE AUTH ---
+  // A sessão real vem do Supabase Auth. O perfil determina a role.
+  type AppRole = 'administrador' | 'lideranca' | 'apoio' | 'producao' | 'visualizador';
 
-  const [sessionUserName, setSessionUserName] = useState<string>(() => {
-    return sessionStorage.getItem('porto_session_user_name') || 'Visitante';
-  });
+  const [sessionUser, setSessionUser] = useState<AppRole | null>(null);
+  const [sessionUserName, setSessionUserName] = useState<string>('Visitante');
 
-  // Entry tabs and states (register tab removed visually)
-  const [loginTab, setLoginTab] = useState<'login' | 'register'>('login');
   const [loginUsername, setLoginUsername] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
   const [loginError, setLoginError] = useState<string>('');
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
 
-  // Register state
-  const [registerName, setRegisterName] = useState<string>('');
-  const [registerUsername, setRegisterUsername] = useState<string>('');
-  const [registerPassword, setRegisterPassword] = useState<string>('');
-  const [registerRole, setRegisterRole] = useState<'producao' | 'adm'>('producao');
-  const [registerSuccess, setRegisterSuccess] = useState<string>('');
-  const [showCredentialsHelp, setShowCredentialsHelp] = useState<boolean>(false);
+  // Administração de usuários: os dados vêm exclusivamente do Supabase Auth + profiles.
+  const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
+  const [managedUsersLoading, setManagedUsersLoading] = useState<boolean>(false);
 
-  const handleLoginSubmit = () => {
-    const usernameInput = loginUsername.trim().toLowerCase();
-    const passwordInput = loginPassword.trim();
+  const getAppRole = (role: string): AppRole => {
+    switch (role.trim().toLowerCase()) {
+      case 'administrador':
+        return 'administrador';
+      case 'lideranca':
+      case 'liderança':
+        return 'lideranca';
+      case 'apoio':
+        return 'apoio';
+      case 'producao':
+      case 'produção':
+        return 'producao';
+      case 'visualizador':
+        return 'visualizador';
+      default:
+        throw new Error(`Role de perfil inválida: ${role}`);
+    }
+  };
 
-    if (!usernameInput) {
-      setLoginError('Por favor, informe seu Usuário.');
+  const getRoleLabel = (role: AppRole): string => {
+    switch (role) {
+      case 'administrador':
+        return 'Administrador';
+      case 'lideranca':
+        return 'Liderança';
+      case 'apoio':
+        return 'Apoio';
+      case 'producao':
+        return 'Produção';
+      case 'visualizador':
+        return 'Visualizador';
+    }
+  };
+
+  const getRoleShortLabel = (role: AppRole): string => {
+    switch (role) {
+      case 'administrador':
+        return 'ADM';
+      case 'lideranca':
+        return 'LIDERANÇA';
+      case 'apoio':
+        return 'APOIO';
+      case 'producao':
+        return 'PRODUÇÃO';
+      case 'visualizador':
+        return 'VISUALIZADOR';
+    }
+  };
+
+  const loadCurrentAuthUser = async () => {
+    if (!supabase) {
+      setSessionUser(null);
+      setSessionUserName('Visitante');
+      setAuthLoading(false);
+      setLoginError('Supabase não está configurado para autenticação.');
       return;
     }
-    if (!passwordInput) {
+
+    setAuthLoading(true);
+
+    try {
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+
+      if (sessionError || !sessionData.session) {
+        setSessionUser(null);
+        setSessionUserName('Visitante');
+        setIsInitializing(false);
+        return;
+      }
+
+      const userId = sessionData.session.user.id;
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('username,name,role')
+        .eq('id', userId)
+        .single();
+
+      if (profileError || !profile) {
+        console.error('Erro ao carregar perfil autenticado:', profileError);
+        await supabase.auth.signOut();
+        setSessionUser(null);
+        setSessionUserName('Visitante');
+        setLoginError('A conta foi autenticada, mas o perfil de acesso não foi encontrado.');
+        setIsInitializing(false);
+        return;
+      }
+
+      const role = getAppRole(profile.role);
+
+      setSessionUser(role);
+      setSessionUserName(profile.name);
+      setGlobalCreator(profile.name);
+      localStorage.setItem('porto_global_creator', profile.name);
+
+      // A produção deve iniciar diretamente no lançamento.
+      setActiveTab(role === 'producao' || role === 'apoio' ? 'ACTIVITIES' : 'DASHBOARD');
+    } catch (error) {
+      console.error('Erro ao restaurar sessão Supabase:', error);
+      await supabase.auth.signOut();
+      setSessionUser(null);
+      setSessionUserName('Visitante');
+      setLoginError('Não foi possível restaurar a sessão.');
+      setIsInitializing(false);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLoginSubmit = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    setLoginError('');
+
+    const identifier = loginUsername.trim();
+    const password = loginPassword;
+
+    if (!identifier) {
+      setLoginError('Por favor, informe seu Usuário ou E-mail.');
+      return;
+    }
+
+    if (!password) {
       setLoginError('Por favor, informe sua Senha.');
       return;
     }
 
-    const matchedUser = usersList.find(
-      u => u.username.toLowerCase() === usernameInput
-    );
-
-    if (!matchedUser) {
-      setLoginError('Usuário não cadastrado.');
+    if (!supabase) {
+      setLoginError('Supabase não está configurado para autenticação.');
       return;
     }
 
-    if (matchedUser.password !== passwordInput) {
-      setLoginError('Senha incorreta.');
-      return;
+    setAuthLoading(true);
+
+    try {
+      let authUserId: string | null = null;
+
+      if (identifier.includes('@')) {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: identifier,
+          password
+        });
+
+        if (error || !data.user) {
+          console.error('Erro no login Supabase Auth:', error);
+          setLoginError('Usuário ou senha incorretos.');
+          return;
+        }
+
+        authUserId = data.user.id;
+      } else {
+        const { data, error } = await supabase.functions.invoke('login-by-identifier', {
+          body: {
+            identifier,
+            password
+          }
+        });
+
+        if (error || !data?.session || !data?.user?.id) {
+          console.error('Erro no login por identificador:', error);
+          setLoginError(data?.error || 'Usuário ou senha incorretos.');
+          return;
+        }
+
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token
+        });
+
+        if (sessionError) {
+          console.error('Erro ao estabelecer a sessão:', sessionError);
+          setLoginError('Não foi possível estabelecer a sessão.');
+          return;
+        }
+
+        authUserId = data.user.id;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('username,name,role')
+        .eq('id', authUserId)
+        .single();
+
+      if (profileError || !profile) {
+        console.error('Erro ao carregar perfil após login:', profileError);
+        await supabase.auth.signOut();
+        setSessionUser(null);
+        setSessionUserName('Visitante');
+        setLoginError('A conta foi autenticada, mas o perfil de acesso não foi encontrado.');
+        return;
+      }
+
+      const role = getAppRole(profile.role);
+
+      setSessionUser(role);
+      setSessionUserName(profile.name);
+      setGlobalCreator(profile.name);
+      localStorage.setItem('porto_global_creator', profile.name);
+
+      setActiveTab(role === 'producao' || role === 'apoio' ? 'ACTIVITIES' : 'DASHBOARD');
+      setLoginUsername('');
+      setLoginPassword('');
+      setLoginError('');
+    } catch (error) {
+      console.error('Erro inesperado durante o login:', error);
+      await supabase.auth.signOut();
+      setSessionUser(null);
+      setSessionUserName('Visitante');
+      setLoginError('Não foi possível concluir o login.');
+    } finally {
+      setAuthLoading(false);
     }
-
-    // Success!
-    setSessionUser(matchedUser.role);
-    setSessionUserName(matchedUser.name);
-    setGlobalCreator(matchedUser.name);
-
-    sessionStorage.setItem('porto_session_user', matchedUser.role);
-    sessionStorage.setItem('porto_session_user_name', matchedUser.name);
-    localStorage.setItem('porto_global_creator', matchedUser.name);
-
-    setActiveTab(matchedUser.role === 'producao' ? 'ACTIVITIES' : 'DASHBOARD');
-    setLoginPassword('');
-    setLoginUsername('');
-    setLoginError('');
-    setRegisterSuccess('');
   };
 
-  const handleRegisterSubmit = () => {
-    const name = registerName.trim();
-    const username = registerUsername.trim().toLowerCase();
-    const password = registerPassword.trim();
-    const role = registerRole;
-
-    if (!name) {
-      setLoginError('Por favor, digite o Nome do Colaborador.');
-      return;
-    }
-    if (!username) {
-      setLoginError('Por favor, defina um Usuário de Login.');
-      ;
-    }
-    if (username.length < 3) {
-      setLoginError('O usuário de login deve ter pelo menos 3 letras.');
-      return;
-    }
-    if (!password) {
-      setLoginError('Por favor, digite uma Senha.');
-      return;
-    }
-    if (password.length < 4) {
-      setLoginError('A senha deve ter pelo menos 4 dígitos.');
-      return;
+  const handleLogout = async () => {
+    if (supabase) {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Erro ao encerrar sessão:', error);
+      }
     }
 
-    const userExists = usersList.some(u => u.username.toLowerCase() === username);
-    if (userExists) {
-      setLoginError('Este nome de usuário já está sendo utilizado.');
-      return;
-    }
-
-    const existingUser = usersList.find(
-    u => u.username === editingUsername
-    );
-    
-    const newUser: CustomUser = {
-      id: existingUser?.id,
-    
-      username,
-      name,
-      password,
-      role: newUserRole
-    };
-
-    const updatedList = [...usersList, newUser];
-    setUsersList(updatedList);
-    localStorage.setItem('porto_custom_users_v2', JSON.stringify(updatedList));
-
-    // Fill details for quick onboarding:
-    setLoginUsername(username);
-    setLoginPassword(password);
-    setLoginTab('login');
-    setLoginError('');
-    setRegisterSuccess(`Perfil de "${name}" criado com sucesso! Use as credenciais abaixo para entrar.`);
-
-    // Clear register fields
-    setRegisterName('');
-    setRegisterUsername('');
-    setRegisterPassword('');
-  };
-
-  const handleLogout = () => {
     setSessionUser(null);
     setSessionUserName('Visitante');
-    sessionStorage.removeItem('porto_session_user');
-    sessionStorage.removeItem('porto_session_user_name');
     setLoginPassword('');
     setLoginUsername('');
     setLoginError('');
-    setRegisterSuccess('');
   };
-
-  const handleCreateUser = async (user: CustomUser) => {
-
-  const success = await dbSaveUser(user);
-
-  if (!success) {
-    alert('Erro ao salvar usuário.');
-    return;
-  }
-
-  await loadUsers();
-};
-
-const handleUpdateUser = async (user: CustomUser) => {
-
-  const success = await dbSaveUser(user);
-
-  if (!success) {
-    alert('Erro ao atualizar usuário.');
-    return;
-  }
-
-  await loadUsers();
-};
-
-const handleDeleteUser = async (
-  username: string
-) => {
-
-  const success =
-    await dbDeleteUser(username);
-
-  if (!success) {
-    alert('Erro ao excluir usuário.');
-    return;
-  }
-
-  await loadUsers();
-};
 
   const handleCreateActivityType = async (
   activityType: {
@@ -443,6 +468,95 @@ const handleDeleteStoppageType = async (
     return `${year}-${month}-${day}`;
   });
 
+
+  const loadManagedUsers = async () => {
+    if (!supabase || sessionUser !== 'administrador') {
+      setManagedUsers([]);
+      setManagedUsersLoading(false);
+      return;
+    }
+
+    setManagedUsersLoading(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-users', {
+        body: { operation: 'list' }
+      });
+
+      if (error || !data?.users) {
+        console.error('Erro ao carregar usuários:', error);
+        alert(data?.error || 'Não foi possível carregar os usuários.');
+        setManagedUsers([]);
+        return;
+      }
+
+      setManagedUsers(data.users as ManagedUser[]);
+    } finally {
+      setManagedUsersLoading(false);
+    }
+  };
+
+  const handleCreateManagedUser = async (
+    payload: NewUserPayload
+  ): Promise<boolean> => {
+    if (!supabase || sessionUser !== 'administrador') {
+      alert('Apenas o Administrador pode cadastrar usuários.');
+      return false;
+    }
+
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: {
+        operation: 'create',
+        ...payload
+      }
+    });
+
+    if (error || !data?.user) {
+      console.error('Erro ao criar usuário:', error);
+      alert(data?.error || 'Não foi possível criar o usuário.');
+      return false;
+    }
+
+    await loadManagedUsers();
+    return true;
+  };
+
+  const handleDeleteManagedUser = async (
+    user: ManagedUser
+  ): Promise<boolean> => {
+    if (!supabase || sessionUser !== 'administrador') {
+      alert('Apenas o Administrador pode excluir usuários.');
+      return false;
+    }
+
+    if (user.username === 'adm') {
+      alert('A conta administrativa principal é protegida.');
+      return false;
+    }
+
+    if (!window.confirm(
+      `Excluir o usuário "${user.name}" (${user.username})? Esta ação remove a conta de autenticação e o perfil de acesso.`
+    )) {
+      return false;
+    }
+
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: {
+        operation: 'delete',
+        id: user.id
+      }
+    });
+
+    if (error || !data?.success) {
+      console.error('Erro ao excluir usuário:', error);
+      alert(data?.error || 'Não foi possível excluir o usuário.');
+      return false;
+    }
+
+    await loadManagedUsers();
+    return true;
+  };
+
   // Active Navigation Tab
   // 'DASHBOARD' | 'PRODUCTION' | 'ACTIVITIES' | 'STOPPAGES' | 'HISTORY'
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -452,86 +566,173 @@ const handleDeleteStoppageType = async (
       : 'DASHBOARD';
   });
 
+  useEffect(() => {
+    if (sessionUser === 'administrador' && activeTab === 'USERS') {
+      loadManagedUsers();
+    }
+  }, [sessionUser, activeTab]);
+
   // Real-time server/clock to display in the header
   const [currentTime, setCurrentTime] = useState<string>('');
 
-  // 2. Load from Supabase (or LocalStorage fallback)
+  // Restore the Supabase Auth session before exposing the application.
   useEffect(() => {
-    async function loadData() {
+    loadCurrentAuthUser();
+
+    if (!supabase) return;
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setSessionUser(null);
+        setSessionUserName('Visitante');
+        setIsInitializing(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 2. Load reference data and operational state from Supabase.
+  // History is loaded independently with server-side pagination.
+  // Reference data must wait for an authenticated session. Otherwise the
+  // browser sends these requests as `anon`, which is intentionally denied
+  // by RLS.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReferenceData() {
       try {
         if (isSupabaseConfigured()) {
-          const acts = await dbFetchActivities();
-          const stops = await dbFetchStoppages();
-          
-          const activityTypes =
-            await dbFetchActivityTypes();
-          const stoppageTypes =
-            await dbFetchStoppageTypes();
-          
-          const pLogs = await dbFetchLogs();
-          
-          if (acts !== null && stops !== null && pLogs !== null) {
-
-            setActivities(acts);
-            setStoppages(stops);
-            
-            if (activityTypes) {
-              setActivitiesList(
-                activityTypes.map(item => ({
-                  code: item.code,
-                  label: item.label
-                }))
-              );
-            }
-            
-            if (stoppageTypes) {
-              setStoppagesList(
-                stoppageTypes.map(item => ({
-                  code: item.code,
-                  name: item.name
-                }))
-              );
-            }
-            setLogs(pLogs);
-            
-            localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(acts));
-            localStorage.setItem(STORAGE_KEYS.STOPPAGES, JSON.stringify(stops));
-            localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(pLogs));
-            setIsInitializing(false);
+          if (!sessionUser || !supabase) {
             return;
           }
-        }
-        
-        // Local state fallback
-        const savedActivities = localStorage.getItem(STORAGE_KEYS.ACTIVITIES);
-        const savedStoppages = localStorage.getItem(STORAGE_KEYS.STOPPAGES);
-        const savedLogs = localStorage.getItem(STORAGE_KEYS.LOGS);
 
-        if (savedActivities && savedStoppages && savedLogs) {
-          // Se contiver dados demonstração do mock original, limpamos automaticamente para a nova operação real
-          if (savedActivities.includes('act-active-demo-1') || savedActivities.includes('20260510_KARL-2') || savedActivities.includes('20260510_KARL-3')) {
-            ([], [], []);
-          } else {
-            persistData(
-              JSON.parse(savedActivities),
-              JSON.parse(savedStoppages),
-              JSON.parse(savedLogs)
+          const { data: sessionData, error: sessionError } =
+            await supabase.auth.getSession();
+
+          if (sessionError || !sessionData.session) {
+            return;
+          }
+          const [activityTypes, stoppageTypes, collaboratorData] = await Promise.all([
+            dbFetchActivityTypes(),
+            dbFetchStoppageTypes(),
+            dbFetchCollaborators()
+          ]);
+
+          if (cancelled) return;
+
+          if (activityTypes) {
+            setActivitiesList(
+              activityTypes.map(item => ({
+                code: item.code,
+                label: item.label
+              }))
             );
           }
-        } else {
-          persistData(INITIAL_ACTIVITIES, INITIAL_STOPPAGES, INITIAL_LOGS);
+
+          if (stoppageTypes) {
+            setStoppagesList(
+              stoppageTypes.map(item => ({
+                code: item.code,
+                name: item.name
+              }))
+            );
+          }
+
+          if (collaboratorData !== null) {
+            setCollaborators(collaboratorData);
+            localStorage.setItem('porto_collaborators', JSON.stringify(collaboratorData));
+          } else {
+            const cached = localStorage.getItem('porto_collaborators');
+            if (cached) {
+              try {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed)) setCollaborators(parsed);
+              } catch {
+                // Ignore invalid cache; Supabase remains the source of truth.
+              }
+            }
+          }
+
+          return;
         }
-      } catch (e) {
-        console.error('Falha ao ler dados:', e);
-      } finally {
-        
-        await loadUsers();
-        
+
+        const cached = localStorage.getItem('porto_collaborators');
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed)) setCollaborators(parsed);
+          } catch {
+            // Ignore invalid cache.
+          }
+        }
+      } catch (error) {
+        console.error('Falha ao carregar cadastros:', error);
+      }
+    }
+
+    loadReferenceData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionUser]);
+
+  const refreshOperationalData = async (showLoading = false) => {
+    if (!sessionUser || !supabase) return;
+
+    if (showLoading) {
+      setIsInitializing(true);
+    }
+
+    try {
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+
+      if (sessionError || !sessionData.session) {
+        console.error('Sessão Supabase indisponível antes da carga operacional:', sessionError);
+        return;
+      }
+
+      const managementRole =
+        sessionUser === 'administrador' ||
+        sessionUser === 'lideranca' ||
+        sessionUser === 'visualizador';
+
+      const [acts, stops] = await Promise.all([
+        managementRole ? dbFetchActivities() : dbFetchActiveActivities(),
+        managementRole ? dbFetchStoppages() : dbFetchActiveStoppages()
+      ]);
+
+      if (acts !== null) {
+        setActivities(acts);
+        localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(acts));
+      }
+
+      if (stops !== null) {
+        setStoppages(stops);
+        localStorage.setItem(STORAGE_KEYS.STOPPAGES, JSON.stringify(stops));
+      }
+
+      // production_logs is an audit resource and is intentionally not
+      // loaded globally because RLS restricts it to management roles.
+      setLogs([]);
+    } catch (error) {
+      console.error('Falha ao carregar dados operacionais:', error);
+    } finally {
+      if (showLoading) {
         setIsInitializing(false);
       }
     }
-    loadData();
-  }, []);
+  };
+
+  useEffect(() => {
+    if (!sessionUser || !supabase) return;
+    refreshOperationalData(true);
+  }, [sessionUser]);
+
 
   // Sync state helpers to update React state & LocalStorage synchronously
   function persistData(
@@ -562,67 +763,6 @@ const handleDeleteStoppageType = async (
     localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(updatedLogs));
   }
 
-    const fixHistoricalDurations = async () => {
-
-  const correctedActivities = activities.map(act => {
-
-    if (!act.startTime || !act.endTime) {
-      return act;
-    }
-
-    const [sh, sm] =
-      act.startTime.split(':').map(Number);
-
-    const [eh, em] =
-      act.endTime.split(':').map(Number);
-
-    let startMinutes =
-      sh * 60 + sm;
-
-    let endMinutes =
-      eh * 60 + em;
-
-    if (endMinutes < startMinutes) {
-      endMinutes += 24 * 60;
-    }
-
-    const totalMinutes =
-      endMinutes - startMinutes;
-
-    const hours =
-      Math.floor(totalMinutes / 60);
-
-    const minutes =
-      totalMinutes % 60;
-
-    return {
-      ...act,
-      duration:
-        `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}`,
-      durationHours:
-        totalMinutes / 60
-    };
-
-  });
-
-  persistData(
-    correctedActivities,
-    stoppages,
-    logs
-  );
-
-  if (isSupabaseConfigured()) {
-
-    for (const activity of correctedActivities) {
-      await dbSaveActivity(activity);
-    }
-
-  }
-
-  alert('Durações históricas corrigidas com sucesso.');
-
-};
-  
   // 3. Header Clock update
   useEffect(() => {
     const updateClock = () => {
@@ -1260,41 +1400,6 @@ const handleDeleteStoppageType = async (
     }
   };
 
-  // Master Resets
-  const handleResetToDemo = () => {
-    if (confirm('Deseja restaurar os dados originais da planilha de Porto Brasil?')) {
-      persistData(INITIAL_ACTIVITIES, INITIAL_STOPPAGES, INITIAL_LOGS);
-      const defaultTab = sessionUser === 'adm' ? 'DASHBOARD' : 'ACTIVITIES';
-      setActiveTab(defaultTab);
-      if (isSupabaseConfigured()) {
-        import('./supabase').then(({ supabase: sb }) => {
-          if (sb) {
-            sb.from('activities').delete().neq('id', '').then(() => {});
-            sb.from('stoppages').delete().neq('id', '').then(() => {});
-            sb.from('production_logs').delete().neq('id', '').then(() => {});
-          }
-        });
-      }
-    }
-  };
-
-  const handleWipeData = () => {
-    if (confirm('ATENÇÃO: Deseja esvaziar permanentemente todos os registros deste terminal?')) {
-      persistData([], [], []);
-      const defaultTab = sessionUser === 'adm' ? 'DASHBOARD' : 'ACTIVITIES';
-      setActiveTab(defaultTab);
-      if (isSupabaseConfigured()) {
-        import('./supabase').then(({ supabase: sb }) => {
-          if (sb) {
-            sb.from('activities').delete().neq('id', '').then(() => {});
-            sb.from('stoppages').delete().neq('id', '').then(() => {});
-            sb.from('production_logs').delete().neq('id', '').then(() => {});
-          }
-        });
-      }
-    }
-  };
-
   // Excluir Lançamentos handles (Restrito a Matheus e Jonas com perfil ativo)
   const handleDeleteActivity = (id: string) => {
     const updated = activities.filter(a => a.id !== id);
@@ -1411,7 +1516,7 @@ const handleDeleteStoppageType = async (
     return activities.filter(a => a.status === 'EM_ANDAMENTO').length;
   }, [activities]);
 
-  if (isInitializing) {
+  if (isInitializing || authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center font-sans">
         <div className="flex flex-col items-center space-y-4">
@@ -1458,11 +1563,11 @@ const handleDeleteStoppageType = async (
             {/* Login view */}
             <div className="space-y-4 animate-fadeIn">
               <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest">Usuário</label>
+                <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest">Usuário ou E-mail</label>
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Ex: producao, lideranca, adm"
+                    placeholder="Ex: sara, jonas, adm ou e-mail"
                     value={loginUsername}
                     onChange={(e) => setLoginUsername(e.target.value)}
                     onKeyDown={(e) => {
@@ -1520,7 +1625,7 @@ const handleDeleteStoppageType = async (
 
   const isAdmLoggedIn = 
     sessionUser === 'lideranca' ||
-    sessionUser === 'adm';
+    sessionUser === 'administrador';
 
   return (
     <div className="flex h-screen w-screen bg-slate-50 font-sans overflow-hidden" id="main-application-panel">
@@ -1543,7 +1648,7 @@ const handleDeleteStoppageType = async (
             {/* Sidebar Navigation links */}
             <nav className="space-y-1">
               {(sessionUser === 'lideranca' ||
-               sessionUser === 'adm' ||
+               sessionUser === 'administrador' ||
                sessionUser === 'visualizador') && (
                 <button
                   onClick={() => setActiveTab('DASHBOARD')}
@@ -1559,36 +1664,37 @@ const handleDeleteStoppageType = async (
                 </button>
               )}
 
-              {(sessionUser === 'producao' ||
-                 sessionUser === 'lideranca' ||
-                 sessionUser === 'adm') && (
+              {sessionUser && (
                 <>
-                  <button
-                    onClick={() => setActiveTab('PRODUCTION')}
-                    id="tab-production"
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left text-sm font-medium relative cursor-pointer ${
-                      activeTab === 'PRODUCTION'
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    <ActivityIcon className="w-5 h-5 shrink-0" />
-                  
-                    <span>Produção</span>
-                  
-                    {(activeActivitiesCount + activeStoppagesCount) > 0 && (
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 bg-blue-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">
-                        {activeActivitiesCount + activeStoppagesCount}
-                      </span>
-                    )}
-                  </button>
+                  {(sessionUser === 'producao' ||
+                    sessionUser === 'apoio' ||
+                    sessionUser === 'lideranca' ||
+                    sessionUser === 'administrador') && (
+                    <button
+                      onClick={() => setActiveTab('PRODUCTION')}
+                      id="tab-production"
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left text-sm font-medium relative cursor-pointer ${
+                        activeTab === 'PRODUCTION'
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                          : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                      }`}
+                    >
+                      <ActivityIcon className="w-5 h-5 shrink-0" />
+                      <span>Produção</span>
+                      {(activeActivitiesCount + activeStoppagesCount) > 0 && (
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 bg-blue-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">
+                          {activeActivitiesCount + activeStoppagesCount}
+                        </span>
+                      )}
+                    </button>
+                  )}
 
                   <button
                     onClick={() => setActiveTab('HISTORY')}
                     id="tab-history"
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left text-sm font-medium cursor-pointer ${
-                      activeTab === 'HISTORY' 
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
+                      activeTab === 'HISTORY'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                         : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                     }`}
                   >
@@ -1596,18 +1702,32 @@ const handleDeleteStoppageType = async (
                     <span>Histórico</span>
                   </button>
 
-                  {sessionUser === 'adm' && (
+                  {(sessionUser === 'administrador' || sessionUser === 'lideranca') && (
                     <button
                       onClick={() => setActiveTab('ADMIN')}
                       id="tab-admin"
                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left text-sm font-medium cursor-pointer ${
-                        activeTab === 'ADMIN' 
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
+                        activeTab === 'ADMIN'
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                           : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                       }`}
                     >
                       <Lock className="w-5 h-5 shrink-0" />
                       <span>Banco de Dados (ADM)</span>
+                    </button>
+                  )}
+                  {sessionUser === 'administrador' && (
+                    <button
+                      onClick={() => setActiveTab('USERS')}
+                      id="tab-users"
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left text-sm font-medium cursor-pointer ${
+                        activeTab === 'USERS'
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                          : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                      }`}
+                    >
+                      <Users className="w-5 h-5 shrink-0" />
+                      <span>Controle de Usuários</span>
                     </button>
                   )}
                 </>
@@ -1647,14 +1767,14 @@ const handleDeleteStoppageType = async (
           <div className="mt-auto border-t border-slate-800 pt-5 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-slate-750 flex items-center justify-center text-xs font-bold text-blue-400 select-none shrink-0 border border-slate-700 uppercase font-mono">
-                {sessionUser === 'adm' ? 'SU' : 'PR'}
+                {getRoleShortLabel(sessionUser).slice(0, 2)}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-white text-sm font-semibold truncate">
-                  {sessionUser === 'adm' ? 'ADM' : 'Operação Produção'}
+                  {sessionUserName}
                 </p>
                 <p className="text-slate-500 text-[10px] uppercase font-mono tracking-wider truncate">
-                  {sessionUser === 'adm' ? 'Nível Gestão' : 'Acesso Operador'}
+                  {getRoleLabel(sessionUser)}
                 </p>
               </div>
             </div>
@@ -1683,6 +1803,7 @@ const handleDeleteStoppageType = async (
               {activeTab === 'ACTIVITIES' && "Lançamento de Atividades & Lotes"}
               {activeTab === 'STOPPAGES' && "Controle de Paradas Temporárias"}
               {activeTab === 'HISTORY' && "Histórico & Auditoria Geral"}
+              {activeTab === 'USERS' && "Controle de Usuários e Permissões"}
             </h1>
             {activeTab !== 'DASHBOARD' && (
               <>
@@ -1709,57 +1830,31 @@ const handleDeleteStoppageType = async (
               )
             )}
 
-           {/* Quick resets buttons */}
-          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/50 p-1 rounded-lg">
-          
-            <button
-              onClick={handleResetToDemo}
-              id="reset-demo-btn"
-              title="Restaurar dados originais da planilha"
-              className="text-slate-400 hover:text-slate-600 hover:bg-white p-1 rounded transition cursor-pointer"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
-          
-            <button
-              onClick={fixHistoricalDurations}
-              title="Corrigir durações"
-              className="text-amber-500 hover:text-amber-700 hover:bg-amber-50 p-1 rounded transition cursor-pointer"
-            >
-              🔧
-            </button>
-          
-            <button
-              onClick={handleWipeData}
-              id="wipe-data-btn"
-              title="Limpar todos os registros"
-              className="text-red-400 hover:text-red-600 hover:bg-rose-50/50 p-1 rounded transition cursor-pointer"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          
-          </div>
 
-            {activeTab !== 'DASHBOARD' && activeTab !== 'ACTIVITIES' && (
-              <button
-                onClick={() => setActiveTab('PRODUCTION')}
-                id="tab-production"
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left text-sm font-medium relative cursor-pointer ${
-                  activeTab === 'PRODUCTION'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <ActivityIcon className="w-5 h-5 shrink-0" />
-                <span>Produção</span>
-              
-                {(activeActivitiesCount + activeStoppagesCount) > 0 && (
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 bg-blue-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">
-                    {activeActivitiesCount + activeStoppagesCount}
-                  </span>
-                )}
-              </button>
-            )}
+            {activeTab !== 'DASHBOARD' &&
+              activeTab !== 'ACTIVITIES' &&
+              (sessionUser === 'producao' ||
+                sessionUser === 'apoio' ||
+                sessionUser === 'lideranca' ||
+                sessionUser === 'administrador') && (
+                <button
+                  onClick={() => setActiveTab('PRODUCTION')}
+                  id="tab-production"
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left text-sm font-medium relative cursor-pointer ${
+                    activeTab === 'PRODUCTION'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <ActivityIcon className="w-5 h-5 shrink-0" />
+                  <span>Produção</span>
+                  {(activeActivitiesCount + activeStoppagesCount) > 0 && (
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 bg-blue-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">
+                      {activeActivitiesCount + activeStoppagesCount}
+                    </span>
+                  )}
+                </button>
+              )}
 
             {/* Logoff Button */}
             <button
@@ -1783,6 +1878,7 @@ const handleDeleteStoppageType = async (
                   activities={activities} 
                   stoppages={stoppages} 
                   onQuickResolveStoppage={handleResolveStoppage}
+                  onRefreshData={refreshOperationalData}
                 />
               )}
 
@@ -1844,9 +1940,6 @@ const handleDeleteStoppageType = async (
 
               {activeTab === 'HISTORY' && (
                 <HistoryLogs
-                  activities={activities}
-                  stoppages={stoppages}
-                
                   onDeleteActivity={handleDeleteActivity}
                   onEditActivity={handleEditActivity}
                 
@@ -1860,9 +1953,27 @@ const handleDeleteStoppageType = async (
               {activeTab === 'ADMIN' && (
                 <AdminPanel 
                   collaborators={collaborators}
-                  onUpdateCollaborators={(newCollabs) => {
-                    setCollaborators(newCollabs);
-                    localStorage.setItem('porto_collaborators', JSON.stringify(newCollabs));
+                  onAddCollaborator={async (name) => {
+                    const success = await dbSaveCollaborator(name);
+                    if (!success) return false;
+
+                    const updated = [
+                      ...collaborators.filter(c => c.toLowerCase() !== name.toLowerCase()),
+                      name
+                    ].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+                    setCollaborators(updated);
+                    localStorage.setItem('porto_collaborators', JSON.stringify(updated));
+                    return true;
+                  }}
+                  onDeactivateCollaborator={async (name) => {
+                    const success = await dbDeactivateCollaborator(name);
+                    if (!success) return false;
+
+                    const updated = collaborators.filter(c => c !== name);
+                    setCollaborators(updated);
+                    localStorage.setItem('porto_collaborators', JSON.stringify(updated));
+                    return true;
                   }}
                   activitiesList={activitiesList}
                   onUpdateActivitiesList={(newList) => {
@@ -1872,19 +1983,22 @@ const handleDeleteStoppageType = async (
                   onUpdateStoppagesList={(newList) => {
                     setStoppagesList(newList);
                   }}
-                  usersList={usersList}
-                  onUpdateUsersList={(newList) => {
-                    setUsersList(newList);
-                  }}
-                  onCreateUser={handleCreateUser}
-                  onUpdateUser={handleUpdateUser}
-                  onDeleteUser={handleDeleteUser}
 
                   onCreateActivityType={handleCreateActivityType}
                   onDeleteActivityType={handleDeleteActivityType}
                   
                   onCreateStoppageType={handleCreateStoppageType}
                   onDeleteStoppageType={handleDeleteStoppageType}
+                />
+              )}
+
+              {activeTab === 'USERS' && sessionUser === 'administrador' && (
+                <AdminUsersManagement
+                  users={managedUsers}
+                  currentUserName={sessionUserName}
+                  loading={managedUsersLoading}
+                  onCreateUser={handleCreateManagedUser}
+                  onDeleteUser={handleDeleteManagedUser}
                 />
               )}
             </div>

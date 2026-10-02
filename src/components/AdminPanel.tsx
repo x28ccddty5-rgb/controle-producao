@@ -1,39 +1,26 @@
 import React, { useState } from 'react';
-import { CustomUser } from '../types';
 import {
   Users,
   Layers,
   PowerOff,
-  Lock,
   Plus,
   Trash2,
-  Save,
   CheckCircle2,
   AlertCircle,
-  Database,
-  ArrowRight,
-  ShieldCheck,
-  Eye,
-  Pencil
+  Database
 } from 'lucide-react';
 //import { motion } from 'motion/react';
 
 interface AdminPanelProps {
   collaborators: string[];
-  onUpdateCollaborators: (newCollabs: string[]) => void;
+  onAddCollaborator: (name: string) => Promise<boolean>;
+  onDeactivateCollaborator: (name: string) => Promise<boolean>;
   
   activitiesList: { code: number; label: string }[];
   onUpdateActivitiesList: (newList: { code: number; label: string }[]) => void;
   
   stoppagesList: { code: number; name: string }[];
   onUpdateStoppagesList: (newList: { code: number; name: string }[]) => void;
-  
-  usersList: CustomUser[];
-  onUpdateUsersList: (newList: CustomUser[]) => void;
-
-  onCreateUser: (user: CustomUser) => Promise<void>;
-  onUpdateUser: (user: CustomUser) => Promise<void>;
-  onDeleteUser: (username: string) => Promise<void>;
 
   onCreateActivityType: (
   activityType: {
@@ -60,7 +47,8 @@ onDeleteStoppageType: (
 
 export default function AdminPanel({
   collaborators,
-  onUpdateCollaborators,
+  onAddCollaborator,
+  onDeactivateCollaborator,
   
   activitiesList,
   onUpdateActivitiesList,
@@ -68,20 +56,13 @@ export default function AdminPanel({
   stoppagesList,
   onUpdateStoppagesList,
   
-  usersList,
-  onUpdateUsersList,
-
-  onCreateUser,
-  onUpdateUser,
-  onDeleteUser,
-  
   onCreateActivityType,
   onDeleteActivityType,
   
   onCreateStoppageType,
   onDeleteStoppageType,
 }: AdminPanelProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'collab' | 'activity' | 'stoppage' | 'users'>('collab');
+  const [activeSubTab, setActiveSubTab] = useState<'collab' | 'activity' | 'stoppage'>('collab');
 
   // Input states
   const [newCollabName, setNewCollabName] = useState('');
@@ -89,24 +70,7 @@ export default function AdminPanel({
   const [newActivityLabel, setNewActivityLabel] = useState('');
   const [newStoppageCode, setNewStoppageCode] = useState<number | ''>('');
   const [newStoppageName, setNewStoppageName] = useState('');
-
-  // User input states
-const [newUserName, setNewUserName] = useState('');
-const [newUserUsername, setNewUserUsername] = useState('');
-const [newUserPassword, setNewUserPassword] = useState('');
-const [newUserRole, setNewUserRole] = useState<'producao' | 'lideranca' | 'visualizador' | 'adm'>('producao');
-
-const [editingUsername, setEditingUsername] = useState<string | null>(null);
-
-const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-const resetUserForm = () => {
-  setNewUserName('');
-  setNewUserUsername('');
-  setNewUserPassword('');
-  setNewUserRole('producao');
-  setEditingUsername(null);
-};
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -116,7 +80,7 @@ const resetUserForm = () => {
   };
 
   // --- 1. Manage Collaborators ---
-  const handleAddCollaborator = (e: React.FormEvent) => {
+  const handleAddCollaborator = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = newCollabName.trim();
     if (!name) {
@@ -128,17 +92,25 @@ const resetUserForm = () => {
       return;
     }
 
-    const updated = [...collaborators, name];
-    onUpdateCollaborators(updated);
+    const success = await onAddCollaborator(name);
+    if (!success) {
+      showNotification('Não foi possível salvar o colaborador no banco de dados.', 'error');
+      return;
+    }
+
     setNewCollabName('');
     showNotification(`Colaborador "${name}" adicionado com sucesso!`);
   };
 
-  const handleDeleteCollaborator = (name: string) => {
+  const handleDeleteCollaborator = async (name: string) => {
     if (confirm(`Tem certeza que deseja desativar o colaborador "${name}" do banco de dados?`)) {
-      const updated = collaborators.filter(c => c !== name);
-      onUpdateCollaborators(updated);
-      showNotification(`Colaborador "${name}" removido.`);
+      const success = await onDeactivateCollaborator(name);
+      if (!success) {
+        showNotification('Não foi possível desativar o colaborador no banco de dados.', 'error');
+        return;
+      }
+
+      showNotification(`Colaborador "${name}" desativado.`);
     }
   };
 
@@ -243,132 +215,6 @@ const resetUserForm = () => {
       );
     }
   };
-
-  // --- 4. Manage Users ---
-  const handleAddUser = async (
-    e: React.FormEvent
-  ) => {
-    e.preventDefault();
-    
-    const name = newUserName.trim();
-    const username = newUserUsername.trim().toLowerCase();
-    const password = newUserPassword.trim();
-
-    if (!name) {
-      showNotification('Digite o nome do usuário.', 'error');
-      return;
-    }
-    if (!username || username.length < 3) {
-      showNotification('Usuário precisa ter 3 ou mais caracteres.', 'error');
-      return;
-    }
-    if (!password || password.length < 3) {
-      showNotification('Senha precisa ter 3 ou mais caracteres.', 'error');
-      return;
-    }
-    if (
-      usersList.some(
-        u =>
-          u.username.toLowerCase() === username &&
-          u.username !== editingUsername
-      )
-    ) {
-      showNotification(
-        `O usuário de acesso "${username}" já está cadastrado.`,
-        'error'
-      );
-      return;
-    }
-
-    const existingUser = usersList.find(
-  u => u.username === editingUsername
-);
-
-const newUser: CustomUser = {
-  id: existingUser?.id,
-
-  username,
-  name,
-  password,
-  role: newUserRole
-};
-
-try {
-
-  if (editingUsername) {
-
-    await onUpdateUser(newUser);
-
-    showNotification(
-      `Usuário "${name}" atualizado com sucesso!`
-    );
-
-  } else {
-
-    await onCreateUser(newUser);
-
-    showNotification(
-      `Usuário "${name}" cadastrado!`
-    );
-  }
-
-  resetUserForm();
-
-} catch (error) {
-
-  console.error(error);
-
-  showNotification(
-    'Erro ao salvar usuário.',
-    'error'
-  );
-}
-
-};
-
-  const handleDeleteUser = async (
-    username: string
-  ) => {
-  
-    const isProtected = [
-      'producao',
-      'lideranca',
-      'adm',
-      'visualizador'
-    ].includes(username.toLowerCase());
-  
-    if (isProtected) {
-      showNotification(
-        'Os usuários padrão do sistema não podem ser excluídos.',
-        'error'
-      );
-      return;
-    }
-  
-    if (!confirm(
-      `Excluir o usuário de acesso "${username}"?`
-    )) {
-      return;
-    }
-  
-    try {
-  
-      await onDeleteUser(username);
-  
-      showNotification(
-        `Usuário "${username}" excluído.`
-      );
-  
-    } catch (error) {
-  
-      console.error(error);
-  
-      showNotification(
-        'Erro ao excluir usuário.',
-        'error'
-      );
-    }
-  };
   
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm font-sans" id="admin-management-container">
@@ -381,7 +227,7 @@ try {
             Banco de Dados Oficial Porto Brasil
           </h2>
           <p className="text-[11px] text-slate-400 font-medium">
-            Painel administrativo secreto de gestão de referências, operadores, atividades e usuários autorizados
+            Painel administrativo de colaboradores, atividades e tipos de paradas
           </p>
         </div>
       </div>
@@ -431,18 +277,6 @@ try {
         >
           <PowerOff className="w-4 h-4" />
           <span>Tipos de Paradas ({stoppagesList.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('users')}
-          className={`flex items-center gap-1.5 pb-3 px-3 text-xs font-extrabold uppercase tracking-wide border-b-2 cursor-pointer transition-all ${
-            activeSubTab === 'users'
-              ? 'border-blue-600 text-slate-800 font-black'
-              : 'border-transparent text-slate-405 hover:text-slate-800'
-          }`}
-        >
-          <Lock className="w-4 h-4" />
-          <span>Usuários e Perfis ({usersList.length})</span>
         </button>
       </div>
 
@@ -644,173 +478,6 @@ try {
           </div>
         )}
 
-        {/* ACCESSIBILITY PROFILES PANEL (USERS) */}
-        {activeSubTab === 'users' && (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-fadeIn font-sans">
-            {/* Form */}
-            <form onSubmit={handleAddUser} className="md:col-span-5 bg-slate-50 border border-slate-150 p-5 rounded-2xl flex flex-col justify-between space-y-3">
-              <div className="space-y-3.5 text-xs">
-                <p className="text-[10px] tracking-wide text-slate-450 uppercase font-bold select-none border-b border-slate-200 pb-1.5 mb-2">
-                  {editingUsername
-                    ? `Editando: ${editingUsername}`
-                    : 'Novo Perfil de Acesso'}
-                </p>
-                
-                <div className="space-y-1.5">
-                  <label className="block font-bold text-slate-500 uppercase tracking-wide">Nome por Extenso</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Carlos Eduardo..."
-                    value={newUserName}
-                    onChange={(e) => setNewUserName(e.target.value)}
-                    className="w-full bg-white border border-slate-205 rounded-xl px-4 py-2 text-slate-705 outline-hidden"
-                  />
-                </div>
-
-                <div className="space-y-1.55">
-                  <label className="block font-bold text-slate-500 uppercase tracking-wide">Login / Usuário (username)</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: carl..."
-                    value={newUserUsername}
-                    onChange={(e) => setNewUserUsername(e.target.value)}
-                    className="w-full bg-white border border-slate-205 rounded-xl px-4 py-2 text-slate-705 font-mono outline-hidden"
-                  />
-                </div>
-
-                <div className="space-y-1.55">
-                  <label className="block font-bold text-slate-500 uppercase tracking-wide">Senha de login</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: 555"
-                    value={newUserPassword}
-                    onChange={(e) => setNewUserPassword(e.target.value)}
-                    className="w-full bg-white border border-slate-205 rounded-xl px-4 py-2 text-slate-705 font-mono outline-hidden"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block font-bold text-slate-500 uppercase tracking-wide">Nível de Acesso (Cargo)</label>
-                  <select
-                    value={newUserRole}
-                    onChange={(e) => setNewUserRole(e.target.value as any)}
-                    className="w-full bg-white border border-slate-205 rounded-xl px-4 py-2 text-slate-705 cursor-pointer outline-hidden"
-                  >
-                    <option value="producao">Sara - Produção (Lança tarefas / paradas / vê histórico)</option>
-                    <option value="lideranca">lideranca / Gerência (Pode apagar dados / ver dashboard)</option>
-                    <option value="adm">adm / Gerência (Pode apagar dados / ver dashboard)</option>
-                    <option value="visualizador">Somente Dashboard (Não acessa outras guias)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-
-                <button
-                  type="submit"
-                  className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wide cursor-pointer flex items-center justify-center gap-2 shadow-xs transition"
-                >
-                  <Plus className="w-4 h-4" />
-              
-                  <span>
-                    {editingUsername
-                      ? 'Atualizar Usuário'
-                      : 'Salvar Usuário'}
-                  </span>
-                </button>
-              
-                {editingUsername && (
-                  <button
-                    type="button"
-                    onClick={resetUserForm}
-                    className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wide cursor-pointer transition"
-                  >
-                    Cancelar
-                  </button>
-                )}
-              
-              </div>
-            </form>
-
-            {/* List */}
-            <div className="md:col-span-7 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="bg-slate-50 border-b border-slate-100 px-5 py-3 flex justify-between items-center">
-                  <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">Usuários do Sistema</span>
-                  <span className="text-[10px] font-mono font-bold text-slate-655 bg-slate-150 px-2 py-0.5 rounded-full">{usersList.length} credenciais</span>
-                </div>
-                
-                <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto custom-scrollbar">
-                  {usersList.map((u) => {
-                    const isProtected = ['producao', 'lideranca', 'adm', 'visualizador'].includes(u.username.toLowerCase());
-                    return (
-                      <div key={u.username} className="px-5 py-3 flex justify-between items-center text-xs hover:bg-slate-50/50 transition">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-700">
-                              {u.name}
-                            </span>
-                          
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${
-                                u.role === 'adm'
-                                  ? 'bg-blue-50 text-blue-700'
-                                  : u.role === 'visualizador'
-                                  ? 'bg-amber-50 text-amber-700'
-                                  : 'bg-slate-100 text-slate-650'
-                              }`}
-                            >
-                              {u.role === 'adm'
-                                ? 'adm'
-                                : u.role === 'visualizador'
-                                ? 'VISUALIZADOR'
-                                : 'OPERAÇÃO'}
-                            </span>
-                          </div>
-                          
-                          <div className="text-[11px] text-slate-500">
-                            Usuário: {u.username}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingUsername(u.username);
-                            
-                                  setNewUserName(u.name);
-                                  setNewUserUsername(u.username);
-                                  setNewUserPassword(u.password);
-                                  setNewUserRole(u.role);
-                                }}
-                                className="text-slate-400 hover:text-blue-500 p-1 rounded transition cursor-pointer"
-                                title="Editar usuário"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                            
-                              {!isProtected && (
-                                <button
-                                  onClick={() => handleDeleteUser(u.username)}
-                                  className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer"
-                                  title="Excluir usuário"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

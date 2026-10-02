@@ -13,38 +13,119 @@ export const isSupabaseConfigured = (): boolean => {
   return !!supabase;
 };
 
+export async function dbFetchCollaborators(): Promise<string[] | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('collaborators')
+      .select('name')
+      .eq('active', true)
+      .order('name');
+
+    if (error) {
+      console.error('Error fetching collaborators:', error);
+      return null;
+    }
+
+    return (data || []).map((row: { name: string }) => row.name);
+  } catch (err) {
+    console.error('Supabase collaborators query failed:', err);
+    return null;
+  }
+}
+
+export async function dbSaveCollaborator(name: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('collaborators')
+      .upsert(
+        { name: name.trim(), active: true },
+        { onConflict: 'name' }
+      );
+
+    if (error) {
+      console.error('Error saving collaborator:', error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Supabase collaborator save failed:', err);
+    return false;
+  }
+}
+
+export async function dbDeactivateCollaborator(name: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('collaborators')
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .eq('name', name);
+
+    if (error) {
+      console.error('Error deactivating collaborator:', error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Supabase collaborator deactivation failed:', err);
+    return false;
+  }
+}
+
 // Activity API
 export async function dbFetchActivities(): Promise<Activity[] | null> {
   if (!supabase) return null;
+
+  const pageSize = 500;
+  const allRows: any[] = [];
+
   try {
-    const { data, error } = await supabase
-      .from('activities')
-      .select('*');
-    if (error) {
-      console.error('Error fetching activities:', error);
-      return null;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .order('id', { ascending: false })
+        .range(offset, offset + pageSize - 1);
+
+      if (error) {
+        console.error('Error fetching activities:', error);
+        return null;
+      }
+
+      const rows = data || [];
+      allRows.push(...rows);
+
+      if (rows.length < pageSize) break;
     }
-    return (data || []).map((row: any) => ({
-    id: row.id,
-    date: row.date,
-    operator: row.operator,
-    activityCode: row.activity_code,
-    activityName: row.activity_name,
-    local: row.local,
-    listId: row.list_id,
-    startTime: row.start_time,
-    endTime: row.end_time,
-    duration: row.duration,
-    durationHours: row.duration_hours,
-    palletJackId: row.pallet_jack_id || '',
-    forkliftId: row.forklift_id || '',
-    producedQuantity: row.produced_quantity || 0,
-    itemsQuantity: row.items_quantity || 0,
-    status: row.status,
-    notes: row.notes,
-    creator: row.creator,
-    createdAt: row.created_at
-})) as Activity[];
+
+    return allRows.map((row: any) => ({
+      id: row.id,
+      date: row.date,
+      operator: row.operator,
+      activityCode: row.activity_code,
+      activityName: row.activity_name,
+      local: row.local,
+      listId: row.list_id,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      duration: row.duration,
+      durationHours: row.duration_hours,
+      palletJackId: row.pallet_jack_id || '',
+      forkliftId: row.forklift_id || '',
+      producedQuantity: row.produced_quantity || 0,
+      itemsQuantity: row.items_quantity || 0,
+      status: row.status,
+      notes: row.notes,
+      creator: row.creator,
+      createdAt: row.created_at
+    })) as Activity[];
   } catch (err) {
     console.error('Supabase activities query failed:', err);
     return null;
@@ -110,35 +191,90 @@ export async function dbDeleteActivity(id: string): Promise<boolean> {
   }
 }
 
-// Stoppage API
-export async function dbFetchStoppages(): Promise<Stoppage[] | null> {
+export async function dbFetchActiveActivities(): Promise<Activity[] | null> {
   if (!supabase) return null;
 
   try {
     const { data, error } = await supabase
-      .from('stoppages')
-      .select('*');
+      .from('activities')
+      .select('*')
+      .in('status', ['EM_ANDAMENTO', 'PAUSADO'])
+      .order('id', { ascending: false });
 
     if (error) {
-      console.error('Error fetching stoppages:', error);
+      console.error('Error fetching active activities:', error);
       return null;
     }
-   return (data || []).map((row: any) => ({
-    id: row.id,
-    date: row.date,
-    operator: row.operator,
-    stoppageCode: row.stoppage_code,
-    stoppageName: row.stoppage_name,
-    startTime: row.start_time,
-    endTime: row.end_time,
-    duration: row.duration,
-    durationMinutes: row.duration_minutes,
-    status: row.status,
-    notes: row.notes,
-    resolutionNotes: row.resolution_notes,
-    creator: row.creator,
-    createdAt: row.created_at
-})) as Stoppage[];
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      date: row.date,
+      operator: row.operator,
+      activityCode: row.activity_code,
+      activityName: row.activity_name,
+      local: row.local,
+      listId: row.list_id,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      duration: row.duration,
+      durationHours: row.duration_hours,
+      palletJackId: row.pallet_jack_id || '',
+      forkliftId: row.forklift_id || '',
+      producedQuantity: row.produced_quantity || 0,
+      itemsQuantity: row.items_quantity || 0,
+      status: row.status,
+      notes: row.notes,
+      creator: row.creator,
+      createdAt: row.created_at
+    })) as Activity[];
+  } catch (err) {
+    console.error('Supabase active activities query failed:', err);
+    return null;
+  }
+}
+
+// Stoppage API
+export async function dbFetchStoppages(): Promise<Stoppage[] | null> {
+  if (!supabase) return null;
+
+  const pageSize = 500;
+  const allRows: any[] = [];
+
+  try {
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase
+        .from('stoppages')
+        .select('*')
+        .order('id', { ascending: false })
+        .range(offset, offset + pageSize - 1);
+
+      if (error) {
+        console.error('Error fetching stoppages:', error);
+        return null;
+      }
+
+      const rows = data || [];
+      allRows.push(...rows);
+
+      if (rows.length < pageSize) break;
+    }
+
+    return allRows.map((row: any) => ({
+      id: row.id,
+      date: row.date,
+      operator: row.operator,
+      stoppageCode: row.stoppage_code,
+      stoppageName: row.stoppage_name,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      duration: row.duration,
+      durationMinutes: row.duration_minutes,
+      status: row.status,
+      notes: row.notes,
+      resolutionNotes: row.resolution_notes,
+      creator: row.creator,
+      createdAt: row.created_at
+    })) as Stoppage[];
   } catch (err) {
     console.error('Supabase stoppages query failed:', err);
     return null;
@@ -193,6 +329,43 @@ export async function dbDeleteStoppage(id: string): Promise<boolean> {
   } catch (err) {
     console.error('Supabase stoppage delete failed:', err);
     return false;
+  }
+}
+
+export async function dbFetchActiveStoppages(): Promise<Stoppage[] | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('stoppages')
+      .select('*')
+      .eq('status', 'ATIVA')
+      .order('id', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching active stoppages:', error);
+      return null;
+    }
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      date: row.date,
+      operator: row.operator,
+      stoppageCode: row.stoppage_code,
+      stoppageName: row.stoppage_name,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      duration: row.duration,
+      durationMinutes: row.duration_minutes,
+      status: row.status,
+      notes: row.notes,
+      resolutionNotes: row.resolution_notes,
+      creator: row.creator,
+      createdAt: row.created_at
+    })) as Stoppage[];
+  } catch (err) {
+    console.error('Supabase active stoppages query failed:', err);
+    return null;
   }
 }
 
@@ -353,6 +526,127 @@ export async function dbDeleteStoppageType(
   }
 }
 
+
+export interface HistoryPageResult<T> {
+  items: T[];
+  totalCount: number;
+}
+
+function mapActivityRow(row: any): Activity {
+  return {
+    id: row.id,
+    date: row.date,
+    operator: row.operator,
+    activityCode: row.activity_code,
+    activityName: row.activity_name,
+    local: row.local,
+    listId: row.list_id,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    duration: row.duration,
+    durationHours: row.duration_hours,
+    palletJackId: row.pallet_jack_id || '',
+    forkliftId: row.forklift_id || '',
+    producedQuantity: row.produced_quantity || 0,
+    itemsQuantity: row.items_quantity || 0,
+    status: row.status,
+    notes: row.notes,
+    creator: row.creator,
+    createdAt: row.created_at
+  };
+}
+
+function mapStoppageRow(row: any): Stoppage {
+  return {
+    id: row.id,
+    date: row.date,
+    operator: row.operator,
+    stoppageCode: row.stoppage_code,
+    stoppageName: row.stoppage_name,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    duration: row.duration,
+    durationMinutes: row.duration_minutes,
+    status: row.status,
+    notes: row.notes,
+    resolutionNotes: row.resolution_notes,
+    creator: row.creator,
+    createdAt: row.created_at
+  };
+}
+
+export async function dbFetchActivityHistoryPage(params: {
+  startDate?: string;
+  endDate?: string;
+  operator?: string;
+  code?: number;
+  limit: number;
+  offset: number;
+}): Promise<HistoryPageResult<Activity> | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase.rpc('get_activity_history', {
+      p_start_date: params.startDate || null,
+      p_end_date: params.endDate || null,
+      p_operator: params.operator?.trim() || null,
+      p_code: params.code ?? null,
+      p_limit: params.limit,
+      p_offset: params.offset
+    });
+
+    if (error) {
+      console.error('Error fetching activity history:', error);
+      return null;
+    }
+
+    const payload = (data || {}) as { items?: any[]; total_count?: number };
+    return {
+      items: (payload.items || []).map(mapActivityRow),
+      totalCount: Number(payload.total_count || 0)
+    };
+  } catch (err) {
+    console.error('Supabase activity history query failed:', err);
+    return null;
+  }
+}
+
+export async function dbFetchStoppageHistoryPage(params: {
+  startDate?: string;
+  endDate?: string;
+  operator?: string;
+  code?: number;
+  limit: number;
+  offset: number;
+}): Promise<HistoryPageResult<Stoppage> | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase.rpc('get_stoppage_history', {
+      p_start_date: params.startDate || null,
+      p_end_date: params.endDate || null,
+      p_operator: params.operator?.trim() || null,
+      p_code: params.code ?? null,
+      p_limit: params.limit,
+      p_offset: params.offset
+    });
+
+    if (error) {
+      console.error('Error fetching stoppage history:', error);
+      return null;
+    }
+
+    const payload = (data || {}) as { items?: any[]; total_count?: number };
+    return {
+      items: (payload.items || []).map(mapStoppageRow),
+      totalCount: Number(payload.total_count || 0)
+    };
+  } catch (err) {
+    console.error('Supabase stoppage history query failed:', err);
+    return null;
+  }
+}
+
 // ProductionLog API
 export async function dbFetchLogs(): Promise<ProductionLog[] | null> {
   if (!supabase) return null;
@@ -418,78 +712,6 @@ export async function dbClearLogs(): Promise<boolean> {
     return true;
   } catch (err) {
     console.error('Supabase logs clearing failed:', err);
-    return false;
-  }
-}
-
-// =========================
-// USERS
-// =========================
-
-export async function dbFetchUsers() {
-  if (!supabase) return null;
-
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .order('name');
-
-    if (error) {
-      console.error(error);
-      return null;
-    }
-
-    return data;
-  } catch (err) {
-    console.error(err);
-    return null;
-  }
-}
-
-export async function dbSaveUser(user: any) {
-  if (!supabase) return false;
-
-  try {
-    const { error } = await supabase
-      .from('users')
-      .upsert({
-        id: user.id,
-        username: user.username,
-        name: user.name,
-        password: user.password,
-        role: user.role
-      });
-
-    if (error) {
-      console.error(error);
-      return false;
-    }
-
-    return true;
-  } catch (err) {
-    console.error(err);
-    return false;
-  }
-}
-
-export async function dbDeleteUser(username: string) {
-  if (!supabase) return false;
-
-  try {
-    const { error } = await supabase
-      .from('users')
-      .delete()
-      .eq('username', username);
-
-    if (error) {
-      console.error(error);
-      return false;
-    }
-
-    return true;
-  } catch (err) {
-    console.error(err);
     return false;
   }
 }
