@@ -1,24 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Activity, Stoppage } from '../types';
-import { 
-  TrendingUp, 
-  Layers, 
-  Clock, 
-  AlertTriangle, 
-  Award, 
-  HelpCircle, 
-  ShieldCheck, 
-  Info,
+import { mobileAdminGetDashboardJourney, MobileDashboardJourney } from '../mobileSupabase';
+import {
+  TrendingUp,
+  Layers,
+  Clock,
+  ShieldCheck,
   Calendar,
-  Filter,
   CheckCircle,
-  TrendingDown,
-  User,
   Activity as ActivityIcon,
-  Search,
-  Users,
-  Check,
-  ChevronRight,
   BookOpen
 } from 'lucide-react';
 //import { motion } from 'motion/react';
@@ -28,6 +18,7 @@ interface DashboardProps {
   stoppages: Stoppage[];
   onQuickResolveStoppage: (stoppageId: string) => void;
   onRefreshData: () => Promise<void>;
+  canViewJourneyMetrics?: boolean;
 }
 
 // Convert hours and minutes from decimal to "HHH:MM" format
@@ -60,20 +51,12 @@ function normalizeOperationalDate(str: string): string | null {
   return null;
 }
 
-// Map classification to visual labels based on the requested rules
-function getProductivityClass(indexVal: number): { label: string; bg: string; text: string; border: string; barBg: string } {
-  if (indexVal >= 120) return { label: 'EXCELENTE', bg: 'bg-emerald-500/10', text: 'text-emerald-500', border: 'border-emerald-500/20', barBg: 'bg-emerald-500' };
-  if (indexVal >= 105) return { label: 'ACIMA DA MÉDIA', bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/20', barBg: 'bg-blue-500' };
-  if (indexVal >= 90) return { label: 'DENTRO DA MÉDIA', bg: 'bg-amber-500/10', text: 'text-amber-500', border: 'border-amber-500/20', barBg: 'bg-amber-500' };
-  if (indexVal >= 75) return { label: 'ATENÇÃO', bg: 'bg-orange-500/10', text: 'text-orange-500', border: 'border-orange-500/20', barBg: 'bg-orange-500' };
-  return { label: 'BAIXA PROD.', bg: 'bg-red-500/10', text: 'text-red-500', border: 'border-red-500/20', barBg: 'bg-red-500' };
-}
-
 export default function Dashboard({
   activities,
   stoppages,
   onQuickResolveStoppage,
-  onRefreshData
+  onRefreshData,
+  canViewJourneyMetrics = false
 }: DashboardProps) {
   // --- 1. Date Interval Period State ---
   const [startDate, setStartDate] = useState(() => {
@@ -93,9 +76,11 @@ export default function Dashboard({
     return `${year}-${month}-${day}`;
   });
 
-  // Active Leaderboard Category Filter
-  // 'GERAL' | 1 | 2 | 3
-  const [selectedActivityFilter, setSelectedActivityFilter] = useState<number | 'GERAL'>('GERAL');
+  const [journeyMetrics, setJourneyMetrics] = useState<MobileDashboardJourney>({
+    rows: [],
+    total_overtime_minutes: 0
+  });
+  const [journeyLoading, setJourneyLoading] = useState(false);
 
   // Trigger period updates quickly
   const handleQuickPeriodSelect = (period: string) => {
@@ -149,6 +134,32 @@ export default function Dashboard({
       setEndDate(formatDate(today));
     }
   };
+
+  useEffect(() => {
+    if (!canViewJourneyMetrics || !startDate || !endDate || startDate > endDate) {
+      setJourneyMetrics({ rows: [], total_overtime_minutes: 0 });
+      return;
+    }
+
+    let cancelled = false;
+    setJourneyLoading(true);
+
+    void mobileAdminGetDashboardJourney(startDate, endDate)
+      .then(result => {
+        if (!cancelled) setJourneyMetrics(result);
+      })
+      .catch(error => {
+        console.error('Falha ao carregar horas extras da jornada Mobile:', error);
+        if (!cancelled) setJourneyMetrics({ rows: [], total_overtime_minutes: 0 });
+      })
+      .finally(() => {
+        if (!cancelled) setJourneyLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canViewJourneyMetrics, startDate, endDate]);
 
   // Check if string date matches the defined interval
   const isWithinPeriod = (dateStr: string) => {
@@ -223,80 +234,47 @@ export default function Dashboard({
     };
   }, [filteredActivities]);
 
-  // --- 4. Category Baseline and Team Average Rates ---
-  const sectorProductivityStats = useMemo(() => {
-    const sectorsDef = [
-      { code: 1, label: 'Separação' },
-      { code: 2, label: 'Armazenamento' },
-      { code: 3, label: 'Remontar Picadeiras' }
-    ];
+  // --- 4. Productivity by collaborator ---
+  // This metric deliberately uses only official activity/stoppage records already
+  // available to the Desktop dashboard. Shift-level transition/overtime will be
+  // added when the dashboard consumes the mobile journey source directly.
+  const collaboratorEfficiency = useMemo(() => {
+    const operators = new Set<string>();
+    filteredActivities.forEach(activity => operators.add(activity.operator));
+    filteredStoppages.forEach(stoppage => operators.add(stoppage.operator));
 
-    return sectorsDef.map(sec => {
-      // Completed items
-      const records = filteredActivities.filter(a => a.activityCode === sec.code && a.status === 'CONCLUIDO');
-      
-      const opGroups: Record<string, { pieces: number; items: number; hours: number }> = {};
-      records.forEach(r => {
-        if (!opGroups[r.operator]) {
-          opGroups[r.operator] = { pieces: 0, items: 0, hours: 0 };
-        }
-        opGroups[r.operator].pieces += r.producedQuantity || 0;
-        opGroups[r.operator].items += r.itemsQuantity || 0;
-        opGroups[r.operator].hours += r.durationHours || 0;
-      });
+    return Array.from(operators).map(operator => {
+      const activityMinutes = filteredActivities
+        .filter(activity => activity.operator === operator)
+        .reduce((sum, activity) => sum + ((activity.durationHours || 0) * 60), 0);
 
-      const operatorRates = Object.entries(opGroups).map(([op, data]) => {
-        const pecasHora = data.hours > 0 ? (data.pieces / data.hours) : 0;
-        const itensHora = data.hours > 0 ? (data.items / data.hours) : 0;
-        return { operator: op, pecasHora, itensHora };
-      });
+      const stoppageMinutes = filteredStoppages
+        .filter(stoppage => stoppage.operator === operator)
+        .reduce((sum, stoppage) => sum + (stoppage.durationMinutes || 0), 0);
 
-      const operatorsWithWork = operatorRates.filter(o => o.pecasHora > 0 || o.itensHora > 0);
-      const totalOps = operatorsWithWork.length;
-
-      const sumPecasRate = operatorsWithWork.reduce((acc, o) => acc + o.pecasHora, 0);
-      const sumItensRate = operatorsWithWork.reduce((acc, o) => acc + o.itensHora, 0);
-
-      const mediaPecasHoraSector = totalOps > 0 ? (sumPecasRate / totalOps) : 0;
-      const mediaItensHoraSector = totalOps > 0 ? (sumItensRate / totalOps) : 0;
+      const recordedMinutes = activityMinutes + stoppageMinutes;
+      const efficiency = recordedMinutes > 0 ? (activityMinutes / recordedMinutes) * 100 : 0;
+      const pieces = filteredActivities
+        .filter(activity => activity.operator === operator)
+        .reduce((sum, activity) => sum + (activity.producedQuantity || 0), 0);
+      const items = filteredActivities
+        .filter(activity => activity.operator === operator)
+        .reduce((sum, activity) => sum + (activity.itemsQuantity || 0), 0);
 
       return {
-        code: sec.code,
-        label: sec.label,
-        mediaPecasHora: mediaPecasHoraSector,
-        mediaItensHora: mediaItensHoraSector,
-        operatorRates,
-        totalOperatorsCount: totalOps
+        operator,
+        activityMinutes,
+        stoppageMinutes,
+        recordedMinutes,
+        efficiency,
+        pieces,
+        items,
+        piecesPerHour: activityMinutes > 0 ? pieces / (activityMinutes / 60) : 0
       };
-    });
-  }, [filteredActivities]);
+    }).sort((a, b) => b.recordedMinutes - a.recordedMinutes);
+  }, [filteredActivities, filteredStoppages]);
 
-  // --- 5. Individual Sector Rankings and Team Averages ---
-  const threeSectorsLeaderboard = useMemo(() => {
-    return sectorProductivityStats.map(sec => {
-      const topOps = sec.operatorRates.map(opRate => {
-        let opIndex = 0;
-        if (sec.mediaPecasHora > 0 && sec.mediaItensHora > 0) {
-          opIndex = (((opRate.pecasHora / sec.mediaPecasHora) * 0.4) + ((opRate.itensHora / sec.mediaItensHora) * 0.6)) * 100;
-        }
-        return {
-          operator: opRate.operator,
-          indexVal: opIndex
-        };
-      }).filter(o => o.indexVal > 0)
-        .sort((a, b) => b.indexVal - a.indexVal);
-
-      const sumIndexes = topOps.reduce((acc, o) => acc + o.indexVal, 0);
-      const teamAvg = topOps.length > 0 ? (sumIndexes / topOps.length) : 0;
-
-      return {
-        ...sec,
-        topOps,
-        teamAvg
-      };
-    });
-  }, [sectorProductivityStats]);
-
+  // --- 5. Ritmo por setor x metas operacionais existentes ---
   const dynamicSectorStats = useMemo(() => {
     const sectorsDef = [
       { code: 1, label: 'Separação', meta: 1458 },
@@ -305,171 +283,33 @@ export default function Dashboard({
     ];
 
     return sectorsDef.map(sec => {
-      const records = filteredActivities.filter(a => a.activityCode === sec.code && a.status === 'CONCLUIDO');
-      
-      let totalPieces = 0;
-
-      let periodHours = 0;
-
-      const start = new Date(startDate + 'T00:00:00');
-      const end = new Date(endDate + 'T23:59:59');
-      
-      periodHours =
-        (end.getTime() - start.getTime()) /
-        (1000 * 60 * 60);
-
-      records.forEach(r => {
-        totalPieces += r.producedQuantity || 0;
-      });
-
-      const avgRate =
-      periodHours > 0
-        ? totalPieces / periodHours
+      const records = filteredActivities.filter(
+        activity => activity.activityCode === sec.code && activity.status === 'CONCLUIDO'
+      );
+      const totalPieces = records.reduce(
+        (sum, record) => sum + (record.producedQuantity || 0),
+        0
+      );
+      const productiveMinutes = records.reduce(
+        (sum, record) => sum + ((record.durationHours || 0) * 60),
+        0
+      );
+      const avgRate = productiveMinutes > 0
+        ? totalPieces / (productiveMinutes / 60)
         : 0;
-      const pctOfMeta = (avgRate / sec.meta) * 100;
+      const pctOfMeta = sec.meta > 0 ? (avgRate / sec.meta) * 100 : 0;
 
       return {
         ...sec,
         avgRate,
-        pctOfMeta: Math.min(Math.max(pctOfMeta, 0), 100), // Clamp visual percentage for standard bar
-        excelPctOfMeta: pctOfMeta > 100 ? Math.min(pctOfMeta - 100, 50) : 0, // surplus bar
+        pctOfMeta: Math.min(Math.max(pctOfMeta, 0), 100),
+        excelPctOfMeta: pctOfMeta > 100 ? Math.min(pctOfMeta - 100, 50) : 0,
         realPctOfMeta: pctOfMeta,
         totalPieces,
-        periodHours
+        productiveMinutes
       };
     });
-  }, [filteredActivities, startDate, endDate]);
-
-  // --- 6. Master Table Ranking Board (VBA Multi-Sector indices) ---
-  const leaderBoard = useMemo(() => {
-    const opsSet = new Set<string>();
-    filteredActivities.forEach(a => { if (a.status === 'CONCLUIDO') opsSet.add(a.operator); });
-
-    const rankings = Array.from(opsSet).map(opName => {
-      const completedIndices: number[] = [];
-      const activeSectors: number[] = [];
-
-      sectorProductivityStats.forEach(sec => {
-        // Skip irrelevant activities when filtering leaderboard specifically
-        if (selectedActivityFilter !== 'GERAL' && sec.code !== selectedActivityFilter) {
-          return;
-        }
-
-        const opRate = sec.operatorRates.find(r => r.operator === opName);
-        if (opRate && (opRate.pecasHora > 0 || opRate.itensHora > 0)) {
-          if (sec.mediaPecasHora > 0 && sec.mediaItensHora > 0) {
-            const operatorIndex = ((opRate.pecasHora / sec.mediaPecasHora) * 0.4) + ((opRate.itensHora / sec.mediaItensHora) * 0.6);
-            completedIndices.push(operatorIndex * 100);
-            activeSectors.push(sec.code);
-          }
-        }
-      });
-
-      const totalActiveSectors = activeSectors.length;
-      const somaIndices = completedIndices.reduce((a, b) => a + b, 0);
-      const mediaIndice = totalActiveSectors > 0 ? (somaIndices / totalActiveSectors) : 0;
-
-      // VBA Factor list for Polivalença
-      let fatorPolivalencia = 0.9;
-      if (totalActiveSectors === 2) {
-        fatorPolivalencia = 1.0;
-      } else if (totalActiveSectors >= 3) {
-        fatorPolivalencia = 1.1;
-      }
-
-      // If specific activity is selected, factor is is disabled or 1.0
-      const actualFactor = selectedActivityFilter === 'GERAL' ? fatorPolivalencia : 1.0;
-      const rankingFinalValue = mediaIndice * actualFactor;
-
-      return {
-        operator: opName,
-        mediaIndice,
-        qtdeAtividades: totalActiveSectors,
-        fatorPolivalencia: actualFactor,
-        rankingFinal: rankingFinalValue,
-        isRated: completedIndices.length > 0
-      };
-    }).filter(r => r.isRated);
-
-    return rankings.sort((a, b) => b.rankingFinal - a.rankingFinal);
-  }, [filteredActivities, sectorProductivityStats, selectedActivityFilter]);
-
-  // --- 7. Insights from Period block ---
-  const insights = useMemo(() => {
-    const bestOverall = leaderBoard[0] || null;
-    // For worst index, take highest non-empty, otherwise lowest
-    const worstOverall = leaderBoard.length > 0 ? leaderBoard[leaderBoard.length - 1] : null;
-
-    let leaderSep = '---';
-    let valSep = 0;
-    let leaderArm = '---';
-    let valArm = 0;
-    let leaderRem = '---';
-    let valRem = 0;
-
-    threeSectorsLeaderboard.forEach(s => {
-      const topOp = s.topOps[0];
-      if (topOp) {
-        if (s.code === 1) { leaderSep = topOp.operator; valSep = topOp.indexVal; }
-        else if (s.code === 2) { leaderArm = topOp.operator; valArm = topOp.indexVal; }
-        else if (s.code === 3) { leaderRem = topOp.operator; valRem = topOp.indexVal; }
-      }
-    });
-
-    // Sum pieces on all activities
-    let totalPieces = 0;
-    filteredActivities.forEach(a => {
-      totalPieces += a.producedQuantity || 0;
-    });
-
-    return {
-      bestOverallOperator: bestOverall ? bestOverall.operator : '---',
-      bestOverallVal: bestOverall ? bestOverall.rankingFinal : 0,
-      worstOverallOperator: worstOverall ? worstOverall.operator : '---',
-      worstOverallVal: worstOverall ? worstOverall.rankingFinal : 0,
-      totalPieces,
-      leaderSep,
-      valSep,
-      leaderArm,
-      valArm,
-      leaderRem,
-      valRem
-    };
-  }, [leaderBoard, threeSectorsLeaderboard, filteredActivities]);
-
-  // --- 8. Team Distribution (Excel classifications) ---
-  const teamDistribution = useMemo(() => {
-    let excelente = 0;
-    let acimaMedia = 0;
-    let dentroMedia = 0;
-    let atencao = 0;
-    let baixaProd = 0;
-
-    leaderBoard.forEach(row => {
-      const r = row.rankingFinal;
-      if (r >= 120) excelente++;
-      else if (r >= 105) acimaMedia++;
-      else if (r >= 90) dentroMedia++;
-      else if (r >= 75) atencao++;
-      else baixaProd++;
-    });
-
-    const total = leaderBoard.length || 1;
-
-    return {
-      totalEvaluated: leaderBoard.length,
-      excelente,
-      excelentePct: (excelente / total) * 100,
-      acimaMedia,
-      acimaMediaPct: (acimaMedia / total) * 100,
-      dentroMedia,
-      dentroMediaPct: (dentroMedia / total) * 100,
-      atencao,
-      atencaoPct: (atencao / total) * 100,
-      baixaProd,
-      baixaProdPct: (baixaProd / total) * 100,
-    };
-  }, [leaderBoard]);
+  }, [filteredActivities]);
 
   // --- 9. Pareto Stoppages downtime list ---
   const stoppagesParetoRaw = useMemo(() => {
@@ -584,619 +424,283 @@ export default function Dashboard({
         </div>
       )}
 
-      {/* SECTION: Hours Indicators (The top 4 colorful boxes matching the exact structure from the image) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="dashboard-hours-indicators">
-        
-        {/* Box 1: HORAS PRODUÇÃO */}
-        <div className="bg-white border border-slate-200/80 p-5 rounded-xl shadow-xs flex flex-col justify-between" id="metric-horas-producao">
+      {/* SECTION: Jornada e operação */}
+      <section className="space-y-3" id="dashboard-hours-indicators">
+        <div className="flex items-center justify-between px-1">
           <div>
-            <p className="text-blue-500 text-xs font-bold uppercase tracking-wider text-center">Horas Produção</p>
-            <h3 className="text-3xl font-extrabold text-blue-600 font-mono tracking-tight text-center mt-2">
-              {formatMinutesToHoursColon(hoursMetrics.totalActivityMins)}
-            </h3>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Resumo operacional</p>
+            <h2 className="text-sm font-extrabold text-slate-800">Tempo e eficiência no período</h2>
           </div>
-          <p className="text-slate-400 text-[11px] text-center mt-3 font-medium">Total de horas de atividades</p>
+          <span className="hidden sm:inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-500">
+            Dados do período selecionado
+          </span>
         </div>
 
-        {/* Box 2: HORAS PARADAS */}
-        <div className="bg-white border border-slate-200/80 p-5 rounded-xl shadow-xs flex flex-col justify-between" id="metric-horas-paradas">
-          <div>
-            <p className="text-red-500 text-xs font-bold uppercase tracking-wider text-center">Horas Paradas</p>
-            <h3 className="text-3xl font-extrabold text-red-600 font-mono tracking-tight text-center mt-2">
-              {formatMinutesToHoursColon(hoursMetrics.totalStoppageMins)}
-            </h3>
+        <div className={`grid grid-cols-2 ${canViewJourneyMetrics ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3`}>
+          <div className="bg-white border border-blue-100 p-4 rounded-xl shadow-xs min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500">Horas produção</p>
+            <div className="mt-2 flex items-end justify-between gap-2">
+              <span className="text-2xl xl:text-3xl font-extrabold text-blue-600 font-mono">{formatMinutesToHoursColon(hoursMetrics.totalActivityMins)}</span>
+              <ActivityIcon className="h-4 w-4 text-blue-400 shrink-0 mb-1" />
+            </div>
+            <p className="text-[10px] text-slate-400 mt-2">Tempo registrado em atividades</p>
           </div>
-          <p className="text-slate-400 text-[11px] text-center mt-3 font-medium">Total de horas de paradas</p>
+
+          <div className="bg-white border border-rose-100 p-4 rounded-xl shadow-xs min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-rose-500">Horas paradas</p>
+            <div className="mt-2 flex items-end justify-between gap-2">
+              <span className="text-2xl xl:text-3xl font-extrabold text-rose-600 font-mono">{formatMinutesToHoursColon(hoursMetrics.totalStoppageMins)}</span>
+              <ShieldCheck className="h-4 w-4 text-rose-400 shrink-0 mb-1" />
+            </div>
+            <p className="text-[10px] text-slate-400 mt-2">Tempo acumulado de paradas</p>
+          </div>
+
+          <div className="bg-white border border-emerald-100 p-4 rounded-xl shadow-xs min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">Horas líquidas</p>
+            <div className="mt-2 flex items-end justify-between gap-2">
+              <span className="text-2xl xl:text-3xl font-extrabold text-emerald-600 font-mono">{formatMinutesToHoursColon(hoursMetrics.totalLiqMins)}</span>
+              <Clock className="h-4 w-4 text-emerald-400 shrink-0 mb-1" />
+            </div>
+            <p className="text-[10px] text-slate-400 mt-2">Produção menos paradas</p>
+          </div>
+
+          <div className="bg-white border border-amber-100 p-4 rounded-xl shadow-xs min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Eficiência</p>
+            <div className="mt-2 flex items-end justify-between gap-2">
+              <span className="text-2xl xl:text-3xl font-extrabold text-amber-500 font-mono">{hoursMetrics.efficiency.toFixed(1)}%</span>
+              <TrendingUp className="h-4 w-4 text-amber-400 shrink-0 mb-1" />
+            </div>
+            <p className="text-[10px] text-slate-400 mt-2">Produção ÷ (produção + paradas)</p>
+          </div>
+
+          {canViewJourneyMetrics && (
+            <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl shadow-xs min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600">Horas extras</p>
+              <div className="mt-2 flex items-end justify-between gap-2">
+                <span className="text-2xl xl:text-3xl font-extrabold text-orange-600 font-mono">
+                  {journeyLoading ? '—:—' : formatMinutesToHoursColon(journeyMetrics.total_overtime_minutes)}
+                </span>
+                <Clock className="h-4 w-4 text-orange-500 shrink-0 mb-1" />
+              </div>
+              <p className="text-[10px] text-orange-700/70 mt-2">Após o fim previsto da escala</p>
+            </div>
+          )}
         </div>
 
-        {/* Box 3: HORAS LÍQUIDAS */}
-        <div className="bg-white border border-slate-200/80 p-5 rounded-xl shadow-xs flex flex-col justify-between" id="metric-horas-liquidas">
-          <div>
-            <p className="text-emerald-500 text-xs font-bold uppercase tracking-wider text-center">Horas Líquidas</p>
-            <h3 className="text-3xl font-extrabold text-emerald-600 font-mono tracking-tight text-center mt-2">
-              {formatMinutesToHoursColon(hoursMetrics.totalLiqMins)}
-            </h3>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2.5">
+            <div>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Composição do tempo registrado</span>
+              <p className="text-[10px] text-slate-400 mt-0.5">Distribuição entre atividade produtiva e parada.</p>
+            </div>
+            <div className="flex items-center gap-3 text-[10px] font-bold">
+              <span className="inline-flex items-center gap-1.5 text-blue-600"><span className="w-2 h-2 rounded-full bg-blue-500" /> Produção {hoursMetrics.totalActivityMins + hoursMetrics.totalStoppageMins > 0 ? ((hoursMetrics.totalActivityMins / (hoursMetrics.totalActivityMins + hoursMetrics.totalStoppageMins)) * 100).toFixed(1) : '0.0'}%</span>
+              <span className="inline-flex items-center gap-1.5 text-rose-600"><span className="w-2 h-2 rounded-full bg-rose-500" /> Paradas {hoursMetrics.totalActivityMins + hoursMetrics.totalStoppageMins > 0 ? ((hoursMetrics.totalStoppageMins / (hoursMetrics.totalActivityMins + hoursMetrics.totalStoppageMins)) * 100).toFixed(1) : '0.0'}%</span>
+            </div>
           </div>
-          <p className="text-slate-400 text-[11px] text-center mt-3 font-medium">Produção - Paradas</p>
-        </div>
-
-        {/* Box 4: EFICIÊNCIA */}
-        <div className="bg-white border border-slate-200/80 p-5 rounded-xl shadow-xs flex flex-col justify-between" id="metric-eficiencia">
-          <div>
-            <p className="text-amber-500 text-xs font-bold uppercase tracking-wider text-center">Eficiência</p>
-            <h3 className="text-3xl font-extrabold text-amber-500 font-mono tracking-tight text-center mt-2">
-              {hoursMetrics.efficiency.toFixed(1)}%
-            </h3>
-          </div>
-          <p className="text-slate-400 text-[11px] text-center mt-3 font-medium">Produção/(Produção+Paradas)</p>
-        </div>
-
-      </div>
-
-      {/* SECTION: Process Quantitative Blocks (User requested splitting separated / stored into 4 separate squares) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" id="dashboard-process-squares">
-        
-        {/* Square A: Peças Separadas */}
-        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center justify-between shadow-xs">
-          <div>
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block font-sans">Peças Separadas</span>
-            <span className="text-2xl font-bold text-slate-800 font-mono block mt-1">
-              {processBoxesMetrics.piecesSeparated.toLocaleString('pt-BR')}
-            </span>
-          </div>
-          <div className="bg-blue-50 text-blue-500 p-2.5 rounded-lg shrink-0">
-            <CheckCircle className="h-5 w-5" />
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 flex">
+            <div
+              className="h-full bg-blue-500 transition-all"
+              style={{ width: `${hoursMetrics.totalActivityMins + hoursMetrics.totalStoppageMins > 0 ? (hoursMetrics.totalActivityMins / (hoursMetrics.totalActivityMins + hoursMetrics.totalStoppageMins)) * 100 : 0}%` }}
+            />
+            <div
+              className="h-full bg-rose-500 transition-all"
+              style={{ width: `${hoursMetrics.totalActivityMins + hoursMetrics.totalStoppageMins > 0 ? (hoursMetrics.totalStoppageMins / (hoursMetrics.totalActivityMins + hoursMetrics.totalStoppageMins)) * 100 : 0}%` }}
+            />
           </div>
         </div>
+      </section>
 
-        {/* Square B: Peças Armazenadas */}
-        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center justify-between shadow-xs">
+      {/* SECTION: Produção física */}
+      <section className="space-y-3" id="dashboard-process-squares">
+        <div className="flex items-center justify-between px-1">
           <div>
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block font-sans">Peças Armazenadas</span>
-            <span className="text-2xl font-bold text-slate-800 font-mono block mt-1">
-              {processBoxesMetrics.piecesStored.toLocaleString('pt-BR')}
-            </span>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Produção física</p>
+            <h2 className="text-sm font-extrabold text-slate-800">Volume consolidado</h2>
           </div>
-          <div className="bg-indigo-50 text-indigo-500 p-2.5 rounded-lg shrink-0">
-            <Layers className="h-5 w-5" />
-          </div>
+          <span className="text-[10px] text-slate-400">Peças e itens registrados</span>
         </div>
 
-        {/* Square C: SKUs de Separação */}
-        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center justify-between shadow-xs">
-          <div>
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block font-sans">SKUs de Separação</span>
-            <span className="text-2xl font-bold text-slate-800 font-mono block mt-1">
-              {processBoxesMetrics.itemsSeparated.toLocaleString('pt-BR')}
-            </span>
-          </div>
-          <div className="bg-emerald-50 text-emerald-500 p-2.5 rounded-lg shrink-0">
-            <TrendingUp className="h-5 w-5" />
-          </div>
-        </div>
-
-        {/* Square D: SKUs de Armazenamento */}
-        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center justify-between shadow-xs">
-          <div>
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block font-sans">SKUs de Armazenamento</span>
-            <span className="text-2xl font-bold text-slate-800 font-mono block mt-1">
-              {processBoxesMetrics.itemsStored.toLocaleString('pt-BR')}
-            </span>
-          </div>
-          <div className="bg-teal-50 text-teal-500 p-2.5 rounded-lg shrink-0">
-            <Clock className="h-5 w-5" />
-          </div>
-        </div>
-
-      </div>
-
-      {/* SECTION: Leaderboards Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="dashboard-rankings-layout">
-        
-        {/* LEFT COLUMN: Leaderboard Card (Com o filtro adicional de atividade individual/geral) */}
-        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col justify-between" id="leaderboard-card-dynamic">
-          <div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-100 pb-4 mb-4 gap-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wide">
-                  <Award className="h-5 w-5 text-blue-600" />
-                  Ranking Colaboradores (Ranking Final)
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-1 font-sans">
-                  Ponderação oficial com base em polivalência e ritmo real
-                </p>
-              </div>
-
-              {/* FILTER ATIVIDADE 1,2,3 (As requested) */}
-              <div className="flex items-center space-x-2 shrink-0">
-                <Filter className="h-3.5 w-3.5 text-slate-400" />
-                <select
-                  value={selectedActivityFilter}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSelectedActivityFilter(val === 'GERAL' ? 'GERAL' : Number(val));
-                  }}
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-600 font-bold font-sans text-xs outline-hidden focus:border-blue-500 cursor-pointer"
-                >
-                  <option value="GERAL">Todas (Geral)</option>
-                  <option value={1}>Atividade 1 (Separação)</option>
-                  <option value={2}>Atividade 2 (Armazenamento)</option>
-                  <option value={3}>Atividade 3 (Remontar Picadeiras)</option>
-                </select>
-              </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs flex items-center justify-between min-w-0">
+            <div className="min-w-0">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Peças separadas</span>
+              <span className="text-xl font-bold text-slate-800 font-mono block mt-1">{processBoxesMetrics.piecesSeparated.toLocaleString('pt-BR')}</span>
             </div>
+            <div className="bg-blue-50 text-blue-500 p-2 rounded-lg shrink-0"><CheckCircle className="h-4 w-4" /></div>
+          </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest select-none bg-slate-50/50">
-                    <th className="py-2.5 text-center w-10">#</th>
-                    <th className="py-2.5 px-2">Colaborador</th>
-                    <th className="py-2.5 text-center font-sans">Média Índice</th>
-                    <th className="py-2.5 text-center font-sans">Atividades</th>
-                    <th className="py-2.5 text-center font-sans">Fator</th>
-                    <th className="py-2.5 text-right font-sans pr-2">Ranking Final</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {leaderBoard.slice(0, 10).map((row, index) => {
-                    const rating = getProductivityClass(row.rankingFinal);
-                    const positionColor = 
-                      index === 0 ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 
-                      index === 1 ? 'bg-slate-400/15 text-slate-600 border-slate-400/30' : 
-                      index === 2 ? 'bg-amber-700/10 text-amber-700 border-amber-700/20' : 
-                      'bg-slate-50 text-slate-500 border-slate-200';
-
-                    return (
-                      <tr key={row.operator} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-2.5 text-center font-mono font-bold select-none">
-                          <span className={`inline-flex items-center justify-center w-5.5 h-5.5 rounded-full border text-xs ${positionColor}`}>
-                            {index + 1}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-2 font-bold text-slate-700">
-                          <div className="flex items-center gap-1.5">
-                            <span className="p-1 px-1.5 rounded-md bg-slate-100 text-slate-600 font-mono text-[9px]">
-                              {row.operator.slice(0, 3).toUpperCase()}
-                            </span>
-                            <span>{row.operator}</span>
-                          </div>
-                        </td>
-                        <td className="py-2.5 text-center font-bold font-mono text-emerald-600">
-                          {row.mediaIndice.toFixed(1)}
-                        </td>
-                        {/* Renamed/Repurposed to raw activities quantity count as requested! */}
-                        <td className="py-2.5 text-center font-semibold text-slate-600">
-                          {row.qtdeAtividades}
-                        </td>
-                        <td className="py-2.5 text-center font-semibold font-mono text-slate-500">
-                          {row.fatorPolivalencia.toFixed(2)}
-                        </td>
-                        <td className="py-2.5 text-right pr-2">
-                          <div className="flex flex-col items-end">
-                            <span className="font-bold font-mono text-slate-800 text-sm">
-                              {row.rankingFinal.toFixed(1)}
-                            </span>
-                            <span className={`text-[8px] px-1 py-0.5 rounded font-bold font-sans tracking-wide shrink-0 ${rating.bg} ${rating.text} border ${rating.border}`}>
-                              {rating.label}
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {leaderBoard.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-400 font-medium">
-                        <HelpCircle className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-                        <span className="text-xs">Nenhum operador com dados concluídos no período.</span>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs flex items-center justify-between min-w-0">
+            <div className="min-w-0">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Peças armazenadas</span>
+              <span className="text-xl font-bold text-slate-800 font-mono block mt-1">{processBoxesMetrics.piecesStored.toLocaleString('pt-BR')}</span>
             </div>
+            <div className="bg-indigo-50 text-indigo-500 p-2 rounded-lg shrink-0"><Layers className="h-4 w-4" /></div>
+          </div>
+
+          <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs flex items-center justify-between min-w-0">
+            <div className="min-w-0">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">SKUs de separação</span>
+              <span className="text-xl font-bold text-slate-800 font-mono block mt-1">{processBoxesMetrics.itemsSeparated.toLocaleString('pt-BR')}</span>
+            </div>
+            <div className="bg-emerald-50 text-emerald-500 p-2 rounded-lg shrink-0"><TrendingUp className="h-4 w-4" /></div>
+          </div>
+
+          <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs flex items-center justify-between min-w-0">
+            <div className="min-w-0">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">SKUs de armazenamento</span>
+              <span className="text-xl font-bold text-slate-800 font-mono block mt-1">{processBoxesMetrics.itemsStored.toLocaleString('pt-BR')}</span>
+            </div>
+            <div className="bg-teal-50 text-teal-500 p-2 rounded-lg shrink-0"><Clock className="h-4 w-4" /></div>
           </div>
         </div>
+      </section>
 
-        {/* RIGHT COLUMN: Métricas de Produtividade do Setor */}
-        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col justify-between" id="sector-metrics-panel">
+      {/* SECTION: Indicadores por colaborador */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs" id="dashboard-collaborator-efficiency">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4 mb-4">
           <div>
-            <div className="flex items-center space-x-2 border-b border-slate-100 pb-3 mb-4">
-              <TrendingUp className="h-5 w-5 text-blue-600 shrink-0" />
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest">
-                Métricas do Setor (Médias de Ritmo)
-              </h3>
-            </div>
-
-            <p className="text-slate-400 text-[11px] mb-4 font-sans leading-relaxed">
-              Indicador consolidado por hora produtiva ativa de cada setor de operação (Ritmo de Peças e SKUs)
-            </p>
-
-            <div className="flex flex-col gap-4">
-              {sectorProductivityStats.map((sec) => {
-                let colorTheme = {
-                  text: 'text-emerald-700',
-                  bg: 'bg-emerald-50',
-                  border: 'border-emerald-100',
-                  numText: 'text-emerald-600',
-                };
-
-                if (sec.code === 2) {
-                  colorTheme = {
-                    text: 'text-blue-700',
-                    bg: 'bg-blue-50',
-                    border: 'border-blue-100',
-                    numText: 'text-blue-600',
-                  };
-                } else if (sec.code === 3) {
-                  colorTheme = {
-                    text: 'text-purple-700',
-                    bg: 'bg-purple-50',
-                    border: 'border-purple-100',
-                    numText: 'text-purple-600',
-                  };
-                }
-
-                return (
-                  <div key={sec.code} className="border border-slate-150 rounded-lg overflow-hidden shrink-0">
-                    <div className={`px-3 py-2 border-b flex justify-between items-center font-bold text-xs ${colorTheme.bg} ${colorTheme.text} ${colorTheme.border}`}>
-                      <span className="uppercase tracking-wider">{sec.label}</span>
-                      <span className="text-[10px] opacity-75">CÓD {sec.code}</span>
-                    </div>
-
-                    <div className="p-3.5 bg-slate-50/20 grid grid-cols-2 gap-3">
-                      {/* Metric A: Peças/Hora */}
-                      <div className="space-y-0.5">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Peças por Hora</span>
-                        <div className="flex items-baseline gap-1">
-                          <span className={`text-xl font-black font-mono tracking-tight ${colorTheme.numText}`}>
-                            {sec.mediaPecasHora.toFixed(1)}
-                          </span>
-                          <span className="text-[9px] text-slate-400 font-bold font-sans">pçs/h</span>
-                        </div>
-                      </div>
-
-                      {/* Metric B: Itens/Hora (only relevant for Separação and Armazenamento) */}
-                      <div className="space-y-0.5">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Itens/SKUs p/Hora</span>
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-xl font-black font-mono tracking-tight text-slate-700 block">
-                            {sec.mediaItensHora.toFixed(1)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Operational operators count info */}
-                    <div className="bg-slate-50/80 px-3 py-1.5 border-t border-slate-150 flex justify-between items-center text-[10px] text-slate-500 font-medium">
-                      <span>Colaboradores Operando:</span>
-                      <span className="font-bold font-mono text-slate-700">{sec.totalOperatorsCount} ativos</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-4 text-[10px] text-slate-400 bg-slate-50/50 p-2.5 rounded-lg border border-slate-150 font-medium leading-relaxed">
-            💡 Os ritmos são calculados em tempo real de forma ponderada com base nas horas úteis gastas em atividades consolidadas.
-          </div>
-        </div>
-
-      </div>
-
-      {/* SECTION: Insights Panel & Team Distribution Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="dashboard-insights-distribution-layout">
-        
-        {/* Card: INSIGHTS DO PERÍODO */}
-        <div className="lg:col-span-6 bg-white border border-slate-200 rounded-xl p-5 shadow-xs" id="insights-panel">
-          <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 mb-4">
-            Insights do Período
-          </h3>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-2 gap-4">
-            
-            {/* Row 1, Col 1: Melhor Ranking Geral */}
-            <div className="bg-emerald-50/50 border border-emerald-100/75 p-3 rounded-lg flex items-center space-x-3">
-              <div className="bg-emerald-500 text-white rounded-lg p-2 shrink-0">
-                <Award className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Melhor Ranking</span>
-                <span className="text-xs font-bold text-slate-700 block truncate">{insights.bestOverallOperator}</span>
-                <span className="text-emerald-600 font-bold font-mono text-xs">{insights.bestOverallVal.toFixed(1)}</span>
-              </div>
-            </div>
-
-            {/* Row 1, Col 2: Menor Ranking Geral */}
-            <div className="bg-red-50/50 border border-red-100/75 p-3 rounded-lg flex items-center space-x-3">
-              <div className="bg-red-500 text-white rounded-lg p-2 shrink-0">
-                <TrendingDown className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Menor Ranking</span>
-                <span className="text-xs font-bold text-slate-700 block truncate">{insights.worstOverallOperator}</span>
-                <span className="text-red-500 font-bold font-mono text-xs">{insights.worstOverallVal.toFixed(1)}</span>
-              </div>
-            </div>
-
-            {/* Row 1, Col 3: Total de Peças */}
-            <div className="bg-blue-50/50 border border-blue-100/75 p-3 rounded-lg flex items-center space-x-3">
-              <div className="bg-blue-500 text-white rounded-lg p-2 shrink-0">
-                <Layers className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Total de Peças</span>
-                <span className="text-xs font-bold text-slate-700 block truncate">Geral Acumulativa</span>
-                <span className="text-blue-600 font-extrabold font-mono text-sm">{insights.totalPieces.toLocaleString('pt-BR')}</span>
-              </div>
-            </div>
-
-            {/* Row 1, Col 4: Horas Líquidas */}
-            <div className="bg-indigo-50/50 border border-indigo-100/75 p-3 rounded-lg flex items-center space-x-3">
-              <div className="bg-indigo-500 text-white rounded-lg p-2 shrink-0">
-                <Clock className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Horas Líquidas</span>
-                <span className="text-xs font-bold text-slate-700 block truncate">Tempo Efetivo</span>
-                <span className="text-indigo-600 font-extrabold font-mono text-sm">{formatMinutesToHoursColon(hoursMetrics.totalLiqMins)}</span>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Leaders of specific sector headers */}
-          <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-3">
-            
-            {/* Lider Separação */}
-            <div className="p-2.5 bg-slate-50 border border-slate-150 rounded-lg text-center font-sans text-xs flex flex-col justify-between">
-              <div>
-                <p className="text-slate-400 font-bold uppercase text-[9px] tracking-wide">Líder Separação</p>
-                <p className="text-slate-700 font-bold mt-1 max-w-full truncate">{insights.leaderSep}</p>
-              </div>
-              <span className="text-emerald-500 font-bold font-mono text-xs mt-1.5 inline-block">
-                {insights.valSep.toFixed(1)}
-              </span>
-            </div>
-
-            {/* Lider Armazenamento */}
-            <div className="p-2.5 bg-slate-50 border border-slate-150 rounded-lg text-center font-sans text-xs flex flex-col justify-between">
-              <div>
-                <p className="text-slate-400 font-bold uppercase text-[9px] tracking-wide">Líder Armazenamento</p>
-                <p className="text-slate-700 font-bold mt-1 max-w-full truncate">{insights.leaderArm}</p>
-              </div>
-              <span className="text-blue-500 font-bold font-mono text-xs mt-1.5 inline-block">
-                {insights.valArm.toFixed(1)}
-              </span>
-            </div>
-
-            {/* Lider Remontar */}
-            <div className="p-2.5 bg-slate-50 border border-slate-150 rounded-lg text-center font-sans text-xs flex flex-col justify-between">
-              <div>
-                <p className="text-slate-400 font-bold uppercase text-[9px] tracking-wide">Líder Remontar</p>
-                <p className="text-slate-700 font-bold mt-1 max-w-full truncate">{insights.leaderRem}</p>
-              </div>
-              <span className="text-purple-500 font-bold font-mono text-xs mt-1.5 inline-block">
-                {insights.valRem.toFixed(1)}
-              </span>
-            </div>
-
-          </div>
-        </div>
-
-        {/* Card: DISTRIBUIÇÃO DA EQUIPE (Based on final ranking classifications) */}
-        <div className="lg:col-span-6 bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col justify-between" id="team-distribution-panel">
-          <div>
-            <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 mb-5">
-              Distribuição da Equipe (Ranking Final)
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-8 items-center py-4">
-              
-              {/* Semicircle indicator widget on left - ENLARGED to fill the container space */}
-              <div className="sm:col-span-5 flex flex-col items-center justify-center py-4 shrink-0 select-none">
-                <div className="relative w-40 h-40 flex items-center justify-center">
-                  <svg className="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                    <circle className="text-slate-100" strokeWidth="3" stroke="currentColor" fill="none" r="16" cx="18" cy="18" />
-                    <circle 
-                      className="text-blue-600" 
-                      strokeDasharray="75, 100" 
-                      strokeWidth="3.5" 
-                      strokeLinecap="round" 
-                      stroke="currentColor" 
-                      fill="none" 
-                      r="16" 
-                      cx="18" 
-                      cy="18" 
-                    />
-                  </svg>
-                  <div className="text-center z-10">
-                    <span className="text-5xl font-black text-slate-850 font-mono tracking-tight block">
-                      {teamDistribution.totalEvaluated}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest block mt-1">AVALIADOS</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Progress bars list on right matching screenshot style */}
-              <div className="sm:col-span-7 space-y-4 font-sans text-xs">
-                
-                {/* 1. Excelente */}
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-600">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> EXCELENTE (≥120)</span>
-                    <span className="font-mono bg-emerald-50 px-1.5 py-0.5 rounded text-emerald-700">{teamDistribution.excelente} op ({teamDistribution.excelentePct.toFixed(0)}%)</span>
-                  </div>
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${teamDistribution.excelentePct}%` }} />
-                  </div>
-                </div>
-
-                {/* 2. Acima da media */}
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-600">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> ACIMA DA MÉDIA (105-120)</span>
-                    <span className="font-mono bg-blue-50 px-1.5 py-0.5 rounded text-blue-700">{teamDistribution.acimaMedia} op ({teamDistribution.acimaMediaPct.toFixed(0)}%)</span>
-                  </div>
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${teamDistribution.acimaMediaPct}%` }} />
-                  </div>
-                </div>
-
-                {/* 3. Dentro da media */}
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-600">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> DENTRO DA MÉDIA (90-105)</span>
-                    <span className="font-mono bg-amber-50 px-1.5 py-0.5 rounded text-amber-700">{teamDistribution.dentroMedia} op ({teamDistribution.dentroMediaPct.toFixed(0)}%)</span>
-                  </div>
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${teamDistribution.dentroMediaPct}%` }} />
-                  </div>
-                </div>
-
-                {/* 4. Atencao */}
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-600">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> ATENÇÃO (75-90)</span>
-                    <span className="font-mono bg-orange-50 px-1.5 py-0.5 rounded text-orange-700">{teamDistribution.atencao} op ({teamDistribution.atencaoPct.toFixed(0)}%)</span>
-                  </div>
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-orange-500 rounded-full transition-all" style={{ width: `${teamDistribution.atencaoPct}%` }} />
-                  </div>
-                </div>
-
-                {/* 5. Baixa Prod. */}
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-[11px] font-bold text-slate-600">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> BAIXA PRODUTIVIDADE (&lt;75)</span>
-                    <span className="font-mono bg-red-50 px-1.5 py-0.5 rounded text-red-700">{teamDistribution.baixaProd} op ({teamDistribution.baixaProdPct.toFixed(0)}%)</span>
-                  </div>
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${teamDistribution.baixaProdPct}%` }} />
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-          </div>
-
-          <div className="mt-4 text-[11px] text-slate-450 bg-slate-50 border border-slate-200 p-3 rounded-lg font-medium">
-            💡 Classificação baseada no Ranking Final de cada colaborador ativo no período.
-          </div>
-        </div>
-
-      </div>
-
-      {/* NEW SECTION: COMPARATIVO METRICAS DO SETOR */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs select-none" id="sector-comparison-chart-container">
-        <div className="border-b border-slate-100 pb-4 mb-5">
-          <div>
-            <div className="flex items-center space-x-2">
-              <TrendingUp className="h-5 w-5 text-blue-600" />
+            <div className="flex items-center gap-2">
+              <ActivityIcon className="h-5 w-5 text-blue-600" />
               <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest">
-                Indicadores do Setor vs Metas Estipuladas
+                Eficiência por Colaborador
               </h3>
             </div>
-            <p className="text-[11px] text-slate-400 font-sans mt-1">
-              Ritmo de produtividade real comparado com as métricas padrão do setor em diferentes intervalos de tempo
+            <p className="text-[11px] text-slate-400 mt-1">
+              Eficiência = tempo produtivo de atividades ÷ tempo operacional registrado (atividades + paradas).
             </p>
+          </div>
+          <div className="text-[10px] text-slate-400 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+            Sem classificação ou posição: apenas indicadores operacionais.
           </div>
         </div>
 
-        {/* COMPARATIVE BARS CONTAINER */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {dynamicSectorStats.map((sec) => {
+        {collaboratorEfficiency.length === 0 ? (
+          <div className="py-12 text-center text-sm text-slate-400">
+            Nenhum colaborador com registros no período selecionado.
+          </div>
+        ) : (
+          <div className="max-h-[42vh] overflow-auto border border-slate-200 rounded-xl">
+            <table className="w-full text-left text-xs">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
+                <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider">
+                  <th className="px-3 py-3">Colaborador</th>
+                  <th className="px-3 py-3 text-right">Tempo produtivo</th>
+                  <th className="px-3 py-3 text-right">Paradas</th>
+                  <th className="px-3 py-3 text-right">Tempo registrado</th>
+                  <th className="px-3 py-3 text-right">Eficiência</th>
+                  <th className="px-3 py-3 text-right">Horas extras</th>
+                  <th className="px-3 py-3 text-right">Peças</th>
+                  <th className="px-3 py-3 text-right">Peças/h</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {collaboratorEfficiency.map(row => {
+                  const journey = journeyMetrics.rows.find(item => item.collaborator_name.toLocaleLowerCase() === row.operator.toLocaleLowerCase());
+                  return (
+                  <tr key={row.operator} className="hover:bg-slate-50">
+                    <td className="px-3 py-3 font-bold text-slate-900 whitespace-nowrap">{row.operator}</td>
+                    <td className="px-3 py-3 text-right font-mono">{formatMinutesToHoursColon(row.activityMinutes)}</td>
+                    <td className="px-3 py-3 text-right font-mono text-red-600">{formatMinutesToHoursColon(row.stoppageMinutes)}</td>
+                    <td className="px-3 py-3 text-right font-mono font-semibold">{formatMinutesToHoursColon(row.recordedMinutes)}</td>
+                    <td className="px-3 py-3 text-right">
+                      <span className="inline-flex min-w-[64px] justify-center rounded-full bg-emerald-50 px-2 py-1 font-bold font-mono text-emerald-700">
+                        {row.efficiency.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-right font-mono text-orange-600">
+                      {journey ? formatMinutesToHoursColon(journey.overtime_minutes) : '—'}
+                    </td>
+                    <td className="px-3 py-3 text-right font-mono">{row.pieces.toLocaleString('pt-BR')}</td>
+                    <td className="px-3 py-3 text-right font-mono">{row.piecesPerHour.toFixed(1)}</td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* SECTION: Ritmo e meta por setor */}
+      <section className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs" id="sector-metrics-panel">
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-2 border-b border-slate-100 pb-4 mb-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-blue-600" />
+              <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest">Ritmo x meta por setor</h3>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Ritmo real calculado somente sobre o tempo produtivo das atividades concluídas, comparado às metas operacionais existentes.
+            </p>
+          </div>
+          <span className="text-[10px] text-slate-400">Meta em peças por hora</span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {dynamicSectorStats.map(sec => {
             const isMetaMet = sec.realPctOfMeta >= 100;
-            const cardTheme = sec.code === 1 ? { border: 'border-emerald-100', bg: 'bg-emerald-500', pillBg: 'bg-emerald-50 text-emerald-700' } :
-                             sec.code === 2 ? { border: 'border-blue-100', bg: 'bg-blue-600', pillBg: 'bg-blue-50 text-blue-700' } :
-                             { border: 'border-purple-100', bg: 'bg-purple-600', pillBg: 'bg-purple-50 text-purple-700' };
+            const cardTheme = sec.code === 1
+              ? { border: 'border-emerald-100', header: 'bg-emerald-50 text-emerald-700', bar: 'bg-emerald-500' }
+              : sec.code === 2
+                ? { border: 'border-blue-100', header: 'bg-blue-50 text-blue-700', bar: 'bg-blue-600' }
+                : { border: 'border-purple-100', header: 'bg-purple-50 text-purple-700', bar: 'bg-purple-600' };
 
             return (
-              <div key={sec.code} className="bg-slate-50 border border-slate-150 rounded-xl p-4 flex flex-col justify-between space-y-3 shadow-xs">
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[11px] font-bold text-slate-400 tracking-wider block uppercase">Setor</span>
-                    <span className="text-[9px] font-mono text-slate-400 tracking-wider">CÓD {sec.code}</span>
-                  </div>
-                  <h4 className="text-sm font-extrabold text-slate-800 tracking-tight">{sec.label}</h4>
-                  
-                  {/* METRICS ROW */}
-                  <div className="grid grid-cols-2 gap-2 mt-3 select-none">
-                    <div className="bg-white rounded-lg p-2 border border-slate-100">
-                      <span className="text-[10px] text-slate-400 font-bold block uppercase">Meta Setor</span>
-                      <div className="flex items-baseline gap-1 mt-0.5">
-                        <span className="text-sm font-mono font-black text-slate-600">{sec.meta}</span>
-                        <span className="text-[9px] text-slate-400 font-bold font-sans">pçs/h</span>
-                      </div>
-                    </div>
+              <article key={sec.code} className={`border ${cardTheme.border} rounded-xl overflow-hidden bg-slate-50/60`}>
+                <div className={`px-4 py-2.5 border-b ${cardTheme.border} ${cardTheme.header} flex items-center justify-between`}>
+                  <span className="text-xs font-extrabold">{sec.code} • {sec.label}</span>
+                  <span className="text-[9px] font-mono opacity-70">CÓD {sec.code}</span>
+                </div>
 
-                    <div className="bg-white rounded-lg p-2 border border-slate-100">
-                      <span className="text-[10px] text-slate-400 font-bold block uppercase">Realizado</span>
-                      <div className="flex items-baseline gap-1 mt-0.5">
-                        <span className="text-sm font-mono font-black text-slate-800">{sec.avgRate.toFixed(1)}</span>
-                        <span className="text-[9px] text-slate-400 font-bold font-sans">pçs/h</span>
+                <div className="p-4 space-y-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-white border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Peças</span>
+                      <div className="text-base font-black font-mono text-slate-800 mt-1">{sec.totalPieces.toLocaleString('pt-BR')}</div>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Tempo</span>
+                      <div className="text-base font-black font-mono text-slate-800 mt-1">{formatMinutesToHoursColon(sec.productiveMinutes)}</div>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Ritmo</span>
+                      <div className="text-base font-black font-mono text-slate-800 mt-1">
+                        {sec.avgRate.toFixed(1)}<span className="text-[8px] font-sans text-slate-400 ml-0.5">pç/h</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* VISUAL COMPARE BAR CHART */}
-                  <div className="mt-4 space-y-1.5 select-none text-[11px] font-sans">
-                    <div className="flex justify-between items-center font-bold">
-                      <span className="text-slate-500 font-medium">% da Meta Atingida</span>
-                      <span className={`font-mono ${isMetaMet ? 'text-emerald-600' : 'text-slate-705'}`}>
-                        {sec.realPctOfMeta.toFixed(1)}%
-                      </span>
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] mb-1.5">
+                      <span className="font-bold text-slate-500">Meta: <span className="font-mono text-slate-700">{sec.meta.toLocaleString('pt-BR')} pç/h</span></span>
+                      <span className={`font-bold font-mono ${isMetaMet ? 'text-emerald-600' : 'text-slate-600'}`}>{sec.realPctOfMeta.toFixed(1)}%</span>
                     </div>
-
-                    <div className="h-3 w-full bg-slate-200 border border-slate-200 rounded-full overflow-hidden flex relative shadow-inner">
-                      {/* Anchor bar representing up to 100% */}
-                      <div 
-                        className={`h-full rounded-l-full transition-all duration-350 ease-out ${cardTheme.bg}`} 
-                        style={{ width: `${sec.pctOfMeta}%`, borderRadius: sec.pctOfMeta === 100 ? '9999px 0 0 9999px' : '9999px' }} 
+                    <div className="h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${cardTheme.bar}`}
+                        style={{ width: `${sec.pctOfMeta}%` }}
                       />
-                      {/* Highlight Surplus bar above 100% */}
-                      {sec.excelPctOfMeta > 0 && (
-                        <div 
-                          className="h-full bg-emerald-400 animate-pulse transition-all duration-350 ease-out" 
-                          style={{ width: `${sec.excelPctOfMeta}%`, borderRadius: '0 9999px 9999px 0' }} 
-                        />
-                      )}
                     </div>
                   </div>
-                </div>
 
-                {/* STATUS FOOTER BADGE */}
-                <div className="pt-2.5 border-t border-slate-200 flex justify-between items-center text-[10px] font-extrabold uppercase select-none">
-                  <div className="flex items-center gap-1.5">
-                    {isMetaMet ? (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                        Atingida
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">
-                        <span className="w-1.5 h-1.5 bg-rose-500 rounded-full" />
-                        Abaixo
-                      </span>
-                    )}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[9px] font-extrabold uppercase ${
+                      isMetaMet ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${isMetaMet ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                      {isMetaMet ? 'Meta atingida' : 'Abaixo da meta'}
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-mono">
+                      {sec.productiveMinutes > 0 ? 'Tempo produtivo utilizado' : 'Sem produção no período'}
+                    </span>
                   </div>
-                  
-                  <span className="text-[10px] text-slate-400 font-mono font-bold">
-                    {sec.periodHours > 0
-                      ? `${sec.periodHours.toFixed(1)}h Período`
-                      : 'Nenhum Lançamento'}
-                  </span>
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
-      </div>
+      </section>
 
       {/* SECTION: Pareto Downtime Reasons (full width, since quick periods have been moved to the top filter header) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="pareto-periodos-rapidos-row">
@@ -1251,34 +755,25 @@ export default function Dashboard({
 
       </div>
 
-      {/* FOOTER CALLOUT BOX (OBSERVAÇÕES block, styled with the yellow tint from the picture) */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5" id="dashboard-footer-notes">
-        <h4 className="text-amber-800 font-bold uppercase tracking-wider text-[11px] mb-3 flex items-center gap-1.5 font-sans">
-          <BookOpen className="h-4 w-4 text-amber-700" /> Observações & Metodologia
+      {/* FOOTER CALLOUT BOX */}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-5" id="dashboard-footer-notes">
+        <h4 className="text-slate-700 font-bold uppercase tracking-wider text-[11px] mb-3 flex items-center gap-1.5 font-sans">
+          <BookOpen className="h-4 w-4 text-blue-600" /> Observações & Metodologia
         </h4>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-amber-900/80 text-xs font-medium">
-          
-          <div className="flex items-start space-x-2">
-            <span className="text-amber-600 font-bold mt-0.5">🏆</span>
-            <p>Melhor desempenho: colaborador ativo no período consultado com maior pontuação no Ranking Final.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-slate-600 text-xs">
+          <div className="flex items-start gap-2">
+            <span className="text-blue-600 font-bold mt-0.5">01</span>
+            <p><strong>Eficiência por colaborador</strong> usa tempo de atividades dividido pelo tempo operacional registrado em atividades + paradas.</p>
           </div>
-
-          <div className="flex items-start space-x-2">
-            <span className="text-amber-600 font-bold mt-0.5">⚡</span>
-            <p>O Ranking Final considera a média dos índices produtivos individuais de todas as atividades, acrescido do fator polivalência.</p>
+          <div className="flex items-start gap-2">
+            <span className="text-emerald-600 font-bold mt-0.5">02</span>
+            <p><strong>Ritmo por setor</strong> preserva as metas operacionais já existentes e não cria uma nova regra de produtividade.</p>
           </div>
-
-          <div className="flex items-start space-x-2">
-            <span className="text-amber-600 font-bold mt-0.5">⏱️</span>
-            <p>Horas Líquidas representam o tempo acumulado realmente gasto em produção ativa (Atividades - Paradas).</p>
+          <div className="flex items-start gap-2">
+            <span className="text-amber-600 font-bold mt-0.5">03</span>
+            <p><strong>Horas extras e transição</strong> não são estimadas por lacunas entre lançamentos. Esses indicadores precisam usar os eventos oficiais da jornada Mobile para não misturar almoço, ausência ou tempo não alocado.</p>
           </div>
-
-          <div className="flex items-start space-x-2">
-            <span className="text-amber-600 font-bold mt-0.5">⚠️</span>
-            <p>Alerta: Colaboradores com pontuação de Ranking Final abaixo de 75 são qualificados sob atenção produtiva.</p>
-          </div>
-
         </div>
       </div>
 

@@ -715,3 +715,52 @@ export async function dbClearLogs(): Promise<boolean> {
     return false;
   }
 }
+
+
+export async function dbAdminCorrectActivityHistory(
+  activityId: string,
+  patch: Record<string, unknown>
+): Promise<Activity | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase.rpc('mobile_admin_update_history_activity', {
+      p_activity_id: activityId,
+      p_patch: patch
+    });
+
+    if (error) {
+      console.error('Error correcting activity history:', error);
+      return null;
+    }
+
+    return data ? mapActivityRow(data) : null;
+  } catch (err) {
+    console.error('Supabase activity history correction failed:', err);
+    return null;
+  }
+}
+
+export async function dbAdminCorrectStoppageHistory(
+  stoppageId: string,
+  patch: Record<string, unknown>
+): Promise<Stoppage | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase.rpc('mobile_admin_update_history_stoppage', {
+      p_stoppage_id: stoppageId,
+      p_patch: patch
+    });
+
+    if (error) {
+      console.error('Error correcting stoppage history:', error);
+      return null;
+    }
+
+    return data ? mapStoppageRow(data) : null;
+  } catch (err) {
+    console.error('Supabase stoppage history correction failed:', err);
+    return null;
+  }
+}

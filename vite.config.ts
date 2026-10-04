@@ -22,7 +22,9 @@ export default defineConfig(() => {
       theme_color: '#1e40af',
       background_color: '#ffffff',
       display: 'standalone',
-      start_url: '/',
+      start_url: '/mobile/?mobile=1',
+      id: '/mobile',
+      scope: '/mobile/',
       icons: [
         {
           src: '/pwa-192x192.png',

@@ -15,3 +15,65 @@
 .animate-soft-pulse {
   animation: softPulse 2s infinite ease-in-out;
 }
+
+
+/* Mobile operational UI */
+.mobile-input {
+  width: 100%;
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 0.9rem;
+  padding: 0.65rem 0.75rem;
+  color: #f8fafc;
+  outline: none;
+  font-size: 0.875rem;
+  min-height: 42px;
+}
+
+.mobile-input:focus {
+  border-color: #3b82f6;
+}
+
+.mobile-primary,
+.mobile-secondary {
+  min-height: 50px;
+  border-radius: 1rem;
+  padding: 0.8rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.mobile-primary {
+  background: #2563eb;
+  color: white;
+}
+
+.mobile-primary:disabled,
+.mobile-secondary:disabled {
+  opacity: 0.4;
+}
+
+.mobile-secondary {
+  background: #0f172a;
+  color: #cbd5e1;
+  border: 1px solid #334155;
+}
+
+
+/* Mobile: prevent iOS Safari from zooming the viewport when a form control receives focus. */
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select,
+  input.mobile-input,
+  textarea.mobile-input,
+  select.mobile-input,
+  .mobile-input {
+    font-size: 16px !important;
+  }
+}

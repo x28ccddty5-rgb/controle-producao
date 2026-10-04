@@ -2,16 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity as ActivityIcon,
   Calendar,
+  Check,
   ChevronLeft,
   ChevronRight,
   Download,
   FileSpreadsheet,
   Filter,
   Layers,
+  Pencil,
   PowerOff,
-  Search
+  Search,
+  X
 } from 'lucide-react';
 import {
+  dbAdminCorrectActivityHistory,
+  dbAdminCorrectStoppageHistory,
   dbFetchActivityHistoryPage,
   dbFetchStoppageHistoryPage,
   HistoryPageResult
@@ -24,11 +29,12 @@ interface HistoryLogsProps {
   onDeleteStoppage?: (id: string) => void;
   onEditStoppage?: (stoppage: Stoppage) => void;
   isAdmin?: boolean;
+  collaborators?: string[];
 }
 
 type SheetTab = 'ACTIVITIES' | 'STOPPAGES';
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 20;
 
 const ACTIVITY_OPTIONS = [
   [1, '1 - Separação'],
@@ -151,40 +157,38 @@ export default function HistoryLogs({
   onEditActivity,
   onDeleteStoppage,
   onEditStoppage,
-  isAdmin
+  isAdmin,
+  collaborators = []
 }: HistoryLogsProps) {
   const [activeSheetTab, setActiveSheetTab] = useState<SheetTab>('ACTIVITIES');
   const [startDate, setStartDate] = useState(getTodayIsoDate);
   const [endDate, setEndDate] = useState(getTodayIsoDate);
-  const [operatorSearch, setOperatorSearch] = useState('');
+  const [operatorFilter, setOperatorFilter] = useState('');
   const [codeFilter, setCodeFilter] = useState('ALL');
   const [page, setPage] = useState(0);
-
-  const [activitiesPage, setActivitiesPage] = useState<HistoryPageResult<Activity>>({
-    items: [],
-    totalCount: 0
-  });
-  const [stoppagesPage, setStoppagesPage] = useState<HistoryPageResult<Stoppage>>({
-    items: [],
-    totalCount: 0
-  });
-
+  const [activitiesPage, setActivitiesPage] = useState<HistoryPageResult<Activity>>({ items: [], totalCount: 0 });
+  const [stoppagesPage, setStoppagesPage] = useState<HistoryPageResult<Stoppage>>({ items: [], totalCount: 0 });
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [editingStoppage, setEditingStoppage] = useState<Stoppage | null>(null);
 
   const selectedCode = codeFilter === 'ALL' ? undefined : Number(codeFilter);
-  const currentItems = activeSheetTab === 'ACTIVITIES'
-    ? activitiesPage.items
-    : stoppagesPage.items;
-  const totalCount = activeSheetTab === 'ACTIVITIES'
-    ? activitiesPage.totalCount
-    : stoppagesPage.totalCount;
+  const currentItems = activeSheetTab === 'ACTIVITIES' ? activitiesPage.items : stoppagesPage.items;
+  const totalCount = activeSheetTab === 'ACTIVITIES' ? activitiesPage.totalCount : stoppagesPage.totalCount;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const codeOptions = useMemo(
     () => activeSheetTab === 'ACTIVITIES' ? ACTIVITY_OPTIONS : STOPPAGE_OPTIONS,
     [activeSheetTab]
+  );
+
+  const sortedCollaborators = useMemo(
+    () => [...collaborators].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [collaborators]
   );
 
   const validatePeriod = () => {
@@ -206,6 +210,7 @@ export default function HistoryLogs({
 
     setLoading(true);
     setError('');
+    setNotice('');
 
     try {
       const offset = requestedPage * PAGE_SIZE;
@@ -214,7 +219,7 @@ export default function HistoryLogs({
         const result = await dbFetchActivityHistoryPage({
           startDate,
           endDate,
-          operator: operatorSearch,
+          operator: operatorFilter,
           code: selectedCode,
           limit: PAGE_SIZE,
           offset
@@ -226,7 +231,7 @@ export default function HistoryLogs({
         const result = await dbFetchStoppageHistoryPage({
           startDate,
           endDate,
-          operator: operatorSearch,
+          operator: operatorFilter,
           code: selectedCode,
           limit: PAGE_SIZE,
           offset
@@ -247,8 +252,8 @@ export default function HistoryLogs({
 
   useEffect(() => {
     void queryHistory(0);
-    // A aba inicia a consulta do período atual.
-    // Filtros só são aplicados ao clicar em Consultar período.
+    // A consulta automática acontece somente na troca de aba.
+    // Filtros são aplicados pelo botão Consultar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSheetTab]);
 
@@ -259,66 +264,33 @@ export default function HistoryLogs({
     setPage(0);
   };
 
+  const handleTabChange = (tab: SheetTab) => {
+    setActiveSheetTab(tab);
+    setCodeFilter('ALL');
+    setPage(0);
+  };
+
   const handleExport = async () => {
     if (!validatePeriod()) return;
 
     setExporting(true);
     setError('');
-
     try {
       if (activeSheetTab === 'ACTIVITIES') {
-        const rows = await fetchAllActivities(startDate, endDate, operatorSearch, selectedCode);
-
-        if (rows.length === 0) {
+        const rows = await fetchAllActivities(startDate, endDate, operatorFilter, selectedCode);
+        if (!rows.length) {
           setError('Nenhuma atividade encontrada para exportação.');
           return;
         }
 
-        const headers = [
-          'ID',
-          'Data',
-          'Colaborador',
-          'Código Atividade',
-          'Local',
-          'Lista',
-          'Inicial',
-          'Final',
-          'Duração',
-          'Mov. Paleteira',
-          'Mov. Empilhadeira',
-          'Qtd Peças',
-          'Qtd de Itens',
-          'Observação',
-          'Quem fez o lançamento',
-          'Data de lançamento'
-        ];
+        const headers = ['ID', 'Data', 'Colaborador', 'Código Atividade', 'Local', 'Lista', 'Inicial', 'Final', 'Duração', 'Mov. Paleteira', 'Mov. Empilhadeira', 'Qtd Peças', 'Qtd de Itens', 'Observação', 'Quem fez o lançamento', 'Data de lançamento'];
+        const csv = [headers.join(';'), ...rows.map(act => [
+          act.id, act.date, act.operator, act.activityCode, act.local, act.listId, act.startTime, act.endTime || '',
+          act.duration, act.palletJackId || '', act.forkliftId || '', act.producedQuantity, act.itemsQuantity,
+          act.notes || '', act.creator, act.createdAt
+        ].map(escapeCsv).join(';'))].join('\n');
 
-        const csv = [
-          headers.join(';'),
-          ...rows.map(act => [
-            act.id,
-            act.date,
-            act.operator,
-            act.activityCode,
-            act.local,
-            act.listId,
-            act.startTime,
-            act.endTime || '',
-            act.duration,
-            act.palletJackId || '',
-            act.forkliftId || '',
-            act.producedQuantity,
-            act.itemsQuantity,
-            act.notes || '',
-            act.creator,
-            act.createdAt
-          ].map(escapeCsv).join(';'))
-        ].join('\n');
-
-        const blob = new Blob(
-          [new Uint8Array([0xEF, 0xBB, 0xBF]), csv],
-          { type: 'text/csv;charset=utf-8;' }
-        );
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -328,46 +300,19 @@ export default function HistoryLogs({
         link.remove();
         URL.revokeObjectURL(url);
       } else {
-        const rows = await fetchAllStoppages(startDate, endDate, operatorSearch, selectedCode);
-
-        if (rows.length === 0) {
+        const rows = await fetchAllStoppages(startDate, endDate, operatorFilter, selectedCode);
+        if (!rows.length) {
           setError('Nenhuma parada encontrada para exportação.');
           return;
         }
 
-        const headers = [
-          'ID',
-          'Data',
-          'Colaborador',
-          'Nº Parada',
-          'Inicial',
-          'Final',
-          'Duração',
-          'Observação',
-          'Quem fez o lançamento',
-          'Data de lançamento'
-        ];
+        const headers = ['ID', 'Data', 'Colaborador', 'Nº Parada', 'Inicial', 'Final', 'Duração', 'Observação', 'Quem fez o lançamento', 'Data de lançamento'];
+        const csv = [headers.join(';'), ...rows.map(stop => [
+          stop.id, stop.date, stop.operator, stop.stoppageCode, stop.startTime, stop.endTime || '',
+          stop.duration, stop.notes || '', stop.creator, stop.createdAt
+        ].map(escapeCsv).join(';'))].join('\n');
 
-        const csv = [
-          headers.join(';'),
-          ...rows.map(stop => [
-            stop.id,
-            stop.date,
-            stop.operator,
-            stop.stoppageCode,
-            stop.startTime,
-            stop.endTime || '',
-            stop.duration,
-            stop.notes || '',
-            stop.creator,
-            stop.createdAt
-          ].map(escapeCsv).join(';'))
-        ].join('\n');
-
-        const blob = new Blob(
-          [new Uint8Array([0xEF, 0xBB, 0xBF]), csv],
-          { type: 'text/csv;charset=utf-8;' }
-        );
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -385,233 +330,188 @@ export default function HistoryLogs({
     }
   };
 
-  const handleTabChange = (tab: SheetTab) => {
-    setActiveSheetTab(tab);
-    setCodeFilter('ALL');
-    setPage(0);
+  const saveActivity = async () => {
+    if (!editingActivity) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const updated = await dbAdminCorrectActivityHistory(editingActivity.id, {
+        local: editingActivity.local,
+        list_id: editingActivity.listId,
+        pallet_jack_id: editingActivity.palletJackId,
+        forklift_id: editingActivity.forkliftId,
+        produced_quantity: editingActivity.producedQuantity,
+        items_quantity: editingActivity.itemsQuantity,
+        notes: editingActivity.notes
+      });
+
+      if (!updated) throw new Error('O banco não confirmou a correção.');
+      setActivitiesPage(current => ({
+        ...current,
+        items: current.items.map(item => item.id === updated.id ? updated : item)
+      }));
+      setNotice('Correção de atividade salva com auditoria.');
+      setEditingActivity(null);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Não foi possível salvar a correção.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const goToPage = (nextPage: number) => {
-    if (nextPage < 0 || nextPage >= totalPages || loading) return;
-    void queryHistory(nextPage);
+  const saveStoppage = async () => {
+    if (!editingStoppage) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const updated = await dbAdminCorrectStoppageHistory(editingStoppage.id, {
+        notes: editingStoppage.notes,
+        resolution_notes: editingStoppage.resolutionNotes
+      });
+
+      if (!updated) throw new Error('O banco não confirmou a correção.');
+      setStoppagesPage(current => ({
+        ...current,
+        items: current.items.map(item => item.id === updated.id ? updated : item)
+      }));
+      setNotice('Correção de parada salva com auditoria.');
+      setEditingStoppage(null);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Não foi possível salvar a correção.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="space-y-6" id="history-sheets-view">
-      <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+    <div className="space-y-5" id="history-sheets-view">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">Histórico de Movimentações</h2>
-            <p className="text-sm text-slate-400 mt-1">
-              Consulte atividades e paradas por período sem carregar todo o histórico para o navegador.
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-blue-600" />
+              <h2 className="text-xl font-bold text-slate-800">Histórico de Movimentações</h2>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Consulta paginada. A tabela permanece limitada à área da tela, mesmo com milhares de registros.
             </p>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={handleExport}
-              disabled={exporting || loading}
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold py-2.5 px-4 rounded-xl text-xs transition flex items-center gap-2"
-            >
-              <Download className="h-4 w-4" />
-              {exporting ? 'Exportando...' : 'Exportar Histórico'}
-            </button>
-          </div>
+          <button
+            onClick={() => void handleExport()}
+            disabled={exporting || loading}
+            className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold py-2.5 px-4 rounded-xl text-xs transition flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            {exporting ? 'Exportando...' : 'Exportar resultado'}
+          </button>
         </div>
 
-        <div className="mt-5 bg-slate-50 border border-slate-200 p-4 rounded-xl">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 items-end">
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+        <div className="px-5 pb-5">
+          <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                 De
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="mt-1.5 w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
               </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={e => setStartDate(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                 Até
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="mt-1.5 w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" />
               </label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={e => setEndDate(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <button
-              onClick={handleToday}
-              className="h-10 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-lg text-xs"
-            >
-              Hoje
-            </button>
-
-            <button
-              onClick={() => void queryHistory(0)}
-              disabled={loading}
-              className="h-10 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-2"
-            >
-              <Search className="w-4 h-4" />
-              {loading ? 'Consultando...' : 'Consultar Período'}
-            </button>
-
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                 Colaborador
+                <select value={operatorFilter} onChange={e => setOperatorFilter(e.target.value)} className="mt-1.5 w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500">
+                  <option value="">Todos</option>
+                  {sortedCollaborators.map(name => <option key={name} value={name}>{name}</option>)}
+                </select>
               </label>
-              <input
-                type="text"
-                value={operatorSearch}
-                onChange={e => setOperatorSearch(e.target.value)}
-                placeholder="Ex.: Luis"
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
-              />
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                {activeSheetTab === 'ACTIVITIES' ? 'Atividade' : 'Motivo da parada'}
+                <select value={codeFilter} onChange={e => setCodeFilter(e.target.value)} className="mt-1.5 w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500">
+                  <option value="ALL">Todos</option>
+                  {codeOptions.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                </select>
+              </label>
+              <div className="flex gap-2">
+                <button onClick={handleToday} className="h-10 px-3 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-lg text-xs">
+                  Hoje
+                </button>
+                <button onClick={() => void queryHistory(0)} disabled={loading} className="h-10 flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-2">
+                  <Search className="w-4 h-4" />
+                  Consultar
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-                {activeSheetTab === 'ACTIVITIES' ? 'Código da Atividade' : 'Nº da Parada'}
-              </label>
-              <select
-                value={codeFilter}
-                onChange={e => setCodeFilter(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
-              >
-                <option value="ALL">Todos</option>
-                {codeOptions.map(([code, label]) => (
-                  <option key={code} value={code}>{label}</option>
-                ))}
-              </select>
+          {(error || notice) && (
+            <div className={`mt-3 rounded-lg px-4 py-3 text-xs font-semibold border ${error ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+              {error || notice}
             </div>
-
-            <div className="md:col-span-2 flex items-end text-xs text-slate-400">
-              <span>
-                A consulta usa a data operacional do lançamento. Nenhuma conversão de fuso horário é aplicada à data histórica.
-              </span>
-            </div>
-          </div>
+          )}
         </div>
-
-        {error && (
-          <div className="mt-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-4 py-3 text-xs font-semibold">
-            {error}
-          </div>
-        )}
       </div>
 
-      <div className="flex border-b border-slate-200 select-none">
-        <button
-          onClick={() => handleTabChange('ACTIVITIES')}
-          className={`px-5 py-3.5 text-sm font-bold border-b-2 flex items-center gap-2 transition ${
-            activeSheetTab === 'ACTIVITIES'
-              ? 'border-emerald-600 text-emerald-700'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          Atividades
-        </button>
-
-        <button
-          onClick={() => handleTabChange('STOPPAGES')}
-          className={`px-5 py-3.5 text-sm font-bold border-b-2 flex items-center gap-2 transition ${
-            activeSheetTab === 'STOPPAGES'
-              ? 'border-red-600 text-red-700'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <PowerOff className="w-4 h-4" />
-          Paradas
-        </button>
+      <div className="flex items-center justify-between gap-3">
+        <div className="inline-flex rounded-xl bg-white border border-slate-200 p-1">
+          <button onClick={() => handleTabChange('ACTIVITIES')} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 ${activeSheetTab === 'ACTIVITIES' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500'}`}>
+            <Layers className="w-4 h-4" /> Atividades
+          </button>
+          <button onClick={() => handleTabChange('STOPPAGES')} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 ${activeSheetTab === 'STOPPAGES' ? 'bg-rose-50 text-rose-700' : 'text-slate-500'}`}>
+            <PowerOff className="w-4 h-4" /> Paradas
+          </button>
+        </div>
+        <span className="text-xs text-slate-500">{totalCount.toLocaleString('pt-BR')} registros</span>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row justify-between gap-2">
-          <div className="flex items-center gap-2">
-            {activeSheetTab === 'ACTIVITIES'
-              ? <ActivityIcon className="w-4 h-4 text-emerald-600" />
-              : <PowerOff className="w-4 h-4 text-red-600" />}
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
-              {activeSheetTab === 'ACTIVITIES' ? 'Histórico de Atividades' : 'Histórico de Paradas'}
-            </span>
-          </div>
-
-          <span className="text-xs font-mono text-slate-500">
-            {totalCount.toLocaleString('pt-BR')} registros
-          </span>
-        </div>
-
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         {loading ? (
-          <div className="py-16 text-center text-sm text-slate-400">
-            Consultando o período no banco de dados...
+          <div className="h-[46vh] min-h-[320px] flex items-center justify-center text-sm text-slate-400">
+            Consultando o período no banco...
           </div>
         ) : currentItems.length === 0 ? (
-          <div className="py-16 text-center text-sm text-slate-400">
-            Nenhum registro encontrado para os filtros selecionados.
+          <div className="h-[46vh] min-h-[320px] flex items-center justify-center text-sm text-slate-400">
+            Nenhum registro encontrado para os filtros.
           </div>
         ) : activeSheetTab === 'ACTIVITIES' ? (
-          <div className="overflow-x-auto">
+          <div className="max-h-[52vh] overflow-auto">
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">
-                  <th className="py-3 px-4 text-center">Data</th>
-                  <th className="py-3 px-4">Colaborador</th>
-                  <th className="py-3 px-4 text-center">Cód.</th>
-                  <th className="py-3 px-4">Local</th>
-                  <th className="py-3 px-4">Lista</th>
-                  <th className="py-3 px-4 text-center">Início</th>
-                  <th className="py-3 px-4 text-center">Fim</th>
-                  <th className="py-3 px-4 text-center">Duração</th>
-                  <th className="py-3 px-4 text-right">Pçs</th>
-                  <th className="py-3 px-4 text-right">Itens</th>
-                  <th className="py-3 px-4">Lançador</th>
-                  {isAdmin && <th className="py-3 px-4 text-center">Ação</th>}
+              <thead className="sticky top-0 z-10 bg-slate-50 shadow-sm">
+                <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-3 text-center">Data</th>
+                  <th className="py-3 px-3">Colaborador</th>
+                  <th className="py-3 px-3 text-center">Cód.</th>
+                  <th className="py-3 px-3">Local</th>
+                  <th className="py-3 px-3">Lista</th>
+                  <th className="py-3 px-3 text-center">Início</th>
+                  <th className="py-3 px-3 text-center">Fim</th>
+                  <th className="py-3 px-3 text-center">Duração</th>
+                  <th className="py-3 px-3 text-right">Pçs</th>
+                  <th className="py-3 px-3 text-right">Itens</th>
+                  {isAdmin && <th className="py-3 px-3 text-center">Corrigir</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
+              <tbody className="divide-y divide-slate-100">
                 {activitiesPage.items.map(act => (
-                  <tr key={act.id} className="hover:bg-slate-50/60">
-                    <td className="py-3 px-4 text-center whitespace-nowrap font-mono">{formatDateForDisplay(act.date)}</td>
-                    <td className="py-3 px-4 font-bold text-slate-900">{act.operator}</td>
-                    <td className="py-3 px-4 text-center font-mono">{act.activityCode}</td>
-                    <td className="py-3 px-4 font-mono">{act.local || '-'}</td>
-                    <td className="py-3 px-4 font-mono">{act.listId || '-'}</td>
-                    <td className="py-3 px-4 text-center font-mono">{act.startTime}</td>
-                    <td className="py-3 px-4 text-center font-mono">{act.endTime || '-'}</td>
-                    <td className="py-3 px-4 text-center font-mono font-bold">{act.duration}</td>
-                    <td className="py-3 px-4 text-right font-mono font-bold">{act.producedQuantity.toLocaleString('pt-BR')}</td>
-                    <td className="py-3 px-4 text-right font-mono font-bold">{act.itemsQuantity.toLocaleString('pt-BR')}</td>
-                    <td className="py-3 px-4">{act.creator}</td>
+                  <tr key={act.id} className="hover:bg-slate-50">
+                    <td className="py-3 px-3 text-center whitespace-nowrap font-mono">{formatDateForDisplay(act.date)}</td>
+                    <td className="py-3 px-3 font-bold text-slate-900 whitespace-nowrap">{act.operator}</td>
+                    <td className="py-3 px-3 text-center font-mono">{act.activityCode}</td>
+                    <td className="py-3 px-3 max-w-[13rem] truncate" title={act.local}>{act.local || '-'}</td>
+                    <td className="py-3 px-3 max-w-[10rem] truncate" title={act.listId}>{act.listId || '-'}</td>
+                    <td className="py-3 px-3 text-center font-mono whitespace-nowrap">{act.startTime}</td>
+                    <td className="py-3 px-3 text-center font-mono whitespace-nowrap">{act.endTime || '-'}</td>
+                    <td className="py-3 px-3 text-center font-mono font-bold">{act.duration}</td>
+                    <td className="py-3 px-3 text-right font-mono font-bold">{act.producedQuantity.toLocaleString('pt-BR')}</td>
+                    <td className="py-3 px-3 text-right font-mono font-bold">{act.itemsQuantity.toLocaleString('pt-BR')}</td>
                     {isAdmin && (
-                      <td className="py-2 px-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => onEditActivity?.(act)}
-                            className="p-1 text-blue-500 hover:bg-blue-50 rounded-md"
-                            title="Editar Registro"
-                          >
-                            <span className="text-[10px] font-bold">EDIT</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (window.confirm('Excluir este registro permanentemente de Atividades?')) {
-                                onDeleteActivity?.(act.id);
-                              }
-                            }}
-                            className="p-1 text-red-500 hover:bg-rose-50 rounded-md"
-                            title="Excluir Registro"
-                          >
-                            <span className="text-[10px] font-bold">DEL</span>
-                          </button>
-                        </div>
+                      <td className="py-2 px-3 text-center">
+                        <button onClick={() => setEditingActivity({ ...act })} className="p-2 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50" title="Corrigir lançamento">
+                          <Pencil className="w-4 h-4" />
+                        </button>
                       </td>
                     )}
                   </tr>
@@ -620,54 +520,35 @@ export default function HistoryLogs({
             </table>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="max-h-[52vh] overflow-auto">
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">
-                  <th className="py-3 px-4 text-center">Data</th>
-                  <th className="py-3 px-4">Colaborador</th>
-                  <th className="py-3 px-4 text-center">Nº</th>
-                  <th className="py-3 px-4 text-center">Início</th>
-                  <th className="py-3 px-4 text-center">Fim</th>
-                  <th className="py-3 px-4 text-center">Duração</th>
-                  <th className="py-3 px-4">Observação</th>
-                  <th className="py-3 px-4">Lançador</th>
-                  {isAdmin && <th className="py-3 px-4 text-center">Ação</th>}
+              <thead className="sticky top-0 z-10 bg-slate-50 shadow-sm">
+                <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-3 text-center">Data</th>
+                  <th className="py-3 px-3">Colaborador</th>
+                  <th className="py-3 px-3 text-center">Nº</th>
+                  <th className="py-3 px-3 text-center">Início</th>
+                  <th className="py-3 px-3 text-center">Fim</th>
+                  <th className="py-3 px-3 text-center">Duração</th>
+                  <th className="py-3 px-3">Observação</th>
+                  {isAdmin && <th className="py-3 px-3 text-center">Corrigir</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
+              <tbody className="divide-y divide-slate-100">
                 {stoppagesPage.items.map(stop => (
-                  <tr key={stop.id} className="hover:bg-slate-50/60">
-                    <td className="py-3 px-4 text-center whitespace-nowrap font-mono">{formatDateForDisplay(stop.date)}</td>
-                    <td className="py-3 px-4 font-bold text-slate-900">{stop.operator}</td>
-                    <td className="py-3 px-4 text-center font-mono">{stop.stoppageCode}</td>
-                    <td className="py-3 px-4 text-center font-mono">{stop.startTime}</td>
-                    <td className="py-3 px-4 text-center font-mono">{stop.endTime || '-'}</td>
-                    <td className="py-3 px-4 text-center font-mono font-bold">{stop.duration}</td>
-                    <td className="py-3 px-4 max-w-sm truncate" title={stop.notes}>{stop.notes || '-'}</td>
-                    <td className="py-3 px-4">{stop.creator}</td>
+                  <tr key={stop.id} className="hover:bg-slate-50">
+                    <td className="py-3 px-3 text-center whitespace-nowrap font-mono">{formatDateForDisplay(stop.date)}</td>
+                    <td className="py-3 px-3 font-bold text-slate-900 whitespace-nowrap">{stop.operator}</td>
+                    <td className="py-3 px-3 text-center font-mono">{stop.stoppageCode}</td>
+                    <td className="py-3 px-3 text-center font-mono whitespace-nowrap">{stop.startTime}</td>
+                    <td className="py-3 px-3 text-center font-mono whitespace-nowrap">{stop.endTime || '-'}</td>
+                    <td className="py-3 px-3 text-center font-mono font-bold">{stop.duration}</td>
+                    <td className="py-3 px-3 max-w-[24rem] truncate" title={stop.notes || ''}>{stop.notes || '-'}</td>
                     {isAdmin && (
-                      <td className="py-2 px-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => onEditStoppage?.(stop)}
-                            className="p-1 text-blue-500 hover:bg-blue-50 rounded-md"
-                            title="Editar Registro"
-                          >
-                            <span className="text-[10px] font-bold">EDIT</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (window.confirm('Excluir este registro permanentemente de Paradas?')) {
-                                onDeleteStoppage?.(stop.id);
-                              }
-                            }}
-                            className="p-1 text-red-500 hover:bg-rose-50 rounded-md"
-                            title="Excluir Registro"
-                          >
-                            <span className="text-[10px] font-bold">DEL</span>
-                          </button>
-                        </div>
+                      <td className="py-2 px-3 text-center">
+                        <button onClick={() => setEditingStoppage({ ...stop })} className="p-2 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50" title="Corrigir lançamento">
+                          <Pencil className="w-4 h-4" />
+                        </button>
                       </td>
                     )}
                   </tr>
@@ -678,38 +559,72 @@ export default function HistoryLogs({
         )}
 
         {totalPages > 1 && (
-          <div className="px-5 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50">
-            <span className="text-xs text-slate-500">
-              Página {page + 1} de {totalPages}
-            </span>
+          <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-between bg-slate-50">
+            <span className="text-xs text-slate-500">Página {page + 1} de {totalPages}</span>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => goToPage(page - 1)}
-                disabled={page === 0 || loading}
-                className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
-                title="Página anterior"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => goToPage(page + 1)}
-                disabled={page + 1 >= totalPages || loading}
-                className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
-                title="Próxima página"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <button onClick={() => void queryHistory(page - 1)} disabled={page === 0 || loading} className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
+              <button onClick={() => void queryHistory(page + 1)} disabled={page + 1 >= totalPages || loading} className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
             </div>
           </div>
         )}
       </div>
 
       <div className="text-[10px] text-slate-400 flex items-center gap-2">
-        <FileSpreadsheet className="w-3.5 h-3.5" />
         <Filter className="w-3.5 h-3.5" />
         <Calendar className="w-3.5 h-3.5" />
-        Consulta paginada diretamente no Supabase. Exportação é feita somente quando solicitada.
+        Consulta paginada diretamente no Supabase.
+        {isAdmin ? ' Correções ficam registradas em auditoria.' : ' O acesso está restrito aos seus próprios registros.'}
       </div>
+
+      {editingActivity && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 p-4 flex items-center justify-center">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white border border-slate-200 shadow-2xl">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-blue-600 font-bold">Correção pontual</div>
+                <h3 className="text-lg font-bold text-slate-900">Atividade {editingActivity.activityCode} • {editingActivity.operator}</h3>
+                <p className="text-xs text-slate-500 mt-1">O registro original permanece identificado e a alteração gera auditoria.</p>
+              </div>
+              <button onClick={() => setEditingActivity(null)} className="p-2 rounded-lg border border-slate-200"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-5 grid grid-cols-2 gap-4">
+              <label className="text-xs font-semibold text-slate-500 col-span-2">Local<input value={editingActivity.local} onChange={e => setEditingActivity(v => v ? { ...v, local: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
+              <label className="text-xs font-semibold text-slate-500">Lista<input value={editingActivity.listId || ''} onChange={e => setEditingActivity(v => v ? { ...v, listId: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
+              <label className="text-xs font-semibold text-slate-500">Peças<input type="number" min={0} value={editingActivity.producedQuantity} onChange={e => setEditingActivity(v => v ? { ...v, producedQuantity: Number(e.target.value) } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" /></label>
+              <label className="text-xs font-semibold text-slate-500">Itens<input type="number" min={0} value={editingActivity.itemsQuantity} onChange={e => setEditingActivity(v => v ? { ...v, itemsQuantity: Number(e.target.value) } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" /></label>
+              <label className="text-xs font-semibold text-slate-500">Paleteira<input value={editingActivity.palletJackId || ''} onChange={e => setEditingActivity(v => v ? { ...v, palletJackId: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
+              <label className="text-xs font-semibold text-slate-500">Empilhadeira<input value={editingActivity.forkliftId || ''} onChange={e => setEditingActivity(v => v ? { ...v, forkliftId: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
+              <label className="text-xs font-semibold text-slate-500 col-span-2">Observação<textarea rows={3} value={editingActivity.notes || ''} onChange={e => setEditingActivity(v => v ? { ...v, notes: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
+            </div>
+            <div className="p-5 border-t border-slate-200 flex justify-end gap-3">
+              <button onClick={() => setEditingActivity(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm">Cancelar</button>
+              <button onClick={() => void saveActivity()} disabled={saving} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold flex items-center gap-2"><Check className="w-4 h-4" />{saving ? 'Salvando...' : 'Salvar correção'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingStoppage && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 p-4 flex items-center justify-center">
+          <div className="w-full max-w-lg rounded-2xl bg-white border border-slate-200 shadow-2xl">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-rose-600 font-bold">Correção pontual</div>
+                <h3 className="text-lg font-bold text-slate-900">Parada {editingStoppage.stoppageCode} • {editingStoppage.operator}</h3>
+              </div>
+              <button onClick={() => setEditingStoppage(null)} className="p-2 rounded-lg border border-slate-200"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <label className="text-xs font-semibold text-slate-500">Observação<textarea rows={3} value={editingStoppage.notes || ''} onChange={e => setEditingStoppage(v => v ? { ...v, notes: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
+              <label className="text-xs font-semibold text-slate-500">Retomada<textarea rows={3} value={editingStoppage.resolutionNotes || ''} onChange={e => setEditingStoppage(v => v ? { ...v, resolutionNotes: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
+            </div>
+            <div className="p-5 border-t border-slate-200 flex justify-end gap-3">
+              <button onClick={() => setEditingStoppage(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm">Cancelar</button>
+              <button onClick={() => void saveStoppage()} disabled={saving} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold flex items-center gap-2"><Check className="w-4 h-4" />{saving ? 'Salvando...' : 'Salvar correção'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

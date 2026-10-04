@@ -41,6 +41,8 @@ import HistoryLogs from './components/HistoryLogs';
 import AdminPanel from './components/AdminPanel';
 import AdminUsersManagement, { ManagedUser, NewUserPayload } from './components/AdminUsersManagement';
 import ProductionBatch from './components/ProductionBatch';
+import MobileProduction from './components/MobileProduction';
+import ShiftPlanning from './components/ShiftPlanning';
 import { 
   Gauge, 
   Activity as ActivityIcon, 
@@ -55,7 +57,8 @@ import {
   Lock,
   Unlock,
   User,
-  Users
+  Users,
+  CalendarDays
 } from 'lucide-react';
 // import { motion, AnimatePresence } from 'motion/react';
 
@@ -73,6 +76,25 @@ function parseTimeToHours(timeStr: string): number {
   const hours = parseInt(parts[0], 10) || 0;
   const minutes = parseInt(parts[1], 10) || 0;
   return hours + minutes / 60;
+}
+
+
+function detectMobileMode(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  const explicitMobile =
+    window.location.pathname === '/mobile' ||
+    window.location.pathname.startsWith('/mobile/') ||
+    params.get('mobile') === '1';
+
+  const standalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+
+  const mobileUserAgent =
+    /Android|iPhone|iPad|iPod|Windows Phone|Mobile/i.test(window.navigator.userAgent);
+
+  return explicitMobile || standalone || mobileUserAgent;
 }
 
 function parseTimeToMinutes(timeStr: string): number {
@@ -592,6 +614,24 @@ const handleDeleteStoppageType = async (
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Mobile must have a deterministic URL when opened from a phone/PWA.
+  // Desktop browsers opened at "/" remain on the existing Desktop route.
+  useEffect(() => {
+    if (!detectMobileMode()) return;
+
+    const isExplicitMobilePath =
+      window.location.pathname === '/mobile' ||
+      window.location.pathname.startsWith('/mobile/');
+
+    if (!isExplicitMobilePath) {
+      window.history.replaceState(
+        window.history.state,
+        '',
+        '/mobile/?mobile=1'
+      );
+    }
   }, []);
 
   // 2. Load reference data and operational state from Supabase.
@@ -1623,6 +1663,18 @@ const handleDeleteStoppageType = async (
     );
   }
 
+  const isMobileRoute = detectMobileMode();
+
+  if (isMobileRoute && sessionUser) {
+    return (
+      <MobileProduction
+        userName={sessionUserName}
+        onLogout={handleLogout}
+        role={sessionUser}
+      />
+    );
+  }
+
   const isAdmLoggedIn = 
     sessionUser === 'lideranca' ||
     sessionUser === 'administrador';
@@ -1714,6 +1766,21 @@ const handleDeleteStoppageType = async (
                     >
                       <Lock className="w-5 h-5 shrink-0" />
                       <span>Banco de Dados (ADM)</span>
+                    </button>
+                  )}
+
+                  {(sessionUser === 'administrador' || sessionUser === 'lideranca') && (
+                    <button
+                      onClick={() => setActiveTab('PLANNING')}
+                      id="tab-planning"
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left text-sm font-medium cursor-pointer ${
+                        activeTab === 'PLANNING'
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                          : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                      }`}
+                    >
+                      <CalendarDays className="w-5 h-5 shrink-0" />
+                      <span>Planejamento</span>
                     </button>
                   )}
                   {sessionUser === 'administrador' && (
@@ -1879,6 +1946,7 @@ const handleDeleteStoppageType = async (
                   stoppages={stoppages} 
                   onQuickResolveStoppage={handleResolveStoppage}
                   onRefreshData={refreshOperationalData}
+                  canViewJourneyMetrics={isAdmLoggedIn}
                 />
               )}
 
@@ -1947,7 +2015,12 @@ const handleDeleteStoppageType = async (
                   onEditStoppage={handleEditStoppage}
                 
                   isAdmin={isAdmLoggedIn}
+                  collaborators={collaborators}
                 />
+              )}
+
+              {activeTab === 'PLANNING' && (sessionUser === 'administrador' || sessionUser === 'lideranca') && (
+                <ShiftPlanning />
               )}
 
               {activeTab === 'ADMIN' && (
