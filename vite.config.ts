@@ -16,15 +16,15 @@ export default defineConfig(() => {
   VitePWA({
     registerType: 'autoUpdate',
     manifest: {
-      name: 'Porto Brasil Movimentação',
-      short_name: 'Porto Brasil',
+      name: 'Controle de Produção',
+      short_name: 'Produção',
       description: 'Controle de Produção e Movimentação',
       theme_color: '#1e40af',
       background_color: '#ffffff',
       display: 'standalone',
-      start_url: '/mobile/?mobile=1',
-      id: '/mobile',
-      scope: '/mobile/',
+      start_url: '/?mobile=1',
+      id: '/',
+      scope: '/',
       icons: [
         {
           src: '/pwa-192x192.png',
