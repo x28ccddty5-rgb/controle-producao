@@ -50,7 +50,6 @@ import {
   FileText, 
   RefreshCw, 
   Trash2, 
-  Factory, 
   Timer,
   ShieldCheck,
   CheckCircle2,
@@ -1560,7 +1559,7 @@ const handleDeleteStoppageType = async (
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center font-sans">
         <div className="flex flex-col items-center space-y-4">
-          <Factory className="h-12 w-12 text-blue-600 animate-bounce" />
+          <img src="/pwa-192x192.png" alt="" className="h-12 w-12 rounded-2xl object-contain animate-bounce" />
           <p className="font-bold text-slate-700 text-sm">Carregando painel...</p>
         </div>
       </div>
@@ -1578,8 +1577,8 @@ const handleDeleteStoppageType = async (
         <div className="max-w-md w-full relative z-10">
           {/* Logo & Brand Header */}
           <div className="text-center mb-6">
-            <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-xl border border-blue-500/20 shadow-blue-500/10">
-              <Factory className="w-7 h-7 text-white" />
+            <div className="w-14 h-14 flex items-center justify-center mx-auto mb-3">
+              <img src="/pwa-192x192.png" alt="Controle de Produção" className="w-14 h-14 rounded-2xl object-contain" />
             </div>
             <h1 className="text-2xl font-bold font-sans tracking-tight text-white uppercase">Porto Brasil</h1>
             <p className="text-slate-400 text-xs mt-1 font-mono uppercase tracking-widest text-[10px]">Apontamento de Movimentação & Paradas</p>
@@ -1688,8 +1687,8 @@ const handleDeleteStoppageType = async (
           <div>
             {/* Sidebar Logo / Header */}
             <div className="flex items-center gap-3 mb-10">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-                <Factory className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                <img src="/pwa-192x192.png" alt="Controle de Produção" className="w-10 h-10 rounded-xl object-contain" />
               </div>
               <div>
                 <span className="text-white font-bold text-lg leading-tight block">Porto Brasil</span>
