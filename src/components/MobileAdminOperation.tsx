@@ -235,7 +235,7 @@ export default function MobileAdminOperation() {
           {session.status === 'FINALIZACAO_PENDENTE' ? (
             <div className="p-4 space-y-4">
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">Ficha final aberta. A atividade continua aberta até confirmar.</div>
-              <FinalForm draft={draft} update={update} canConfirm={canConfirm} working={working} onBack={async () => {
+              <FinalForm activityCode={session.activity_code} draft={draft} update={update} canConfirm={canConfirm} working={working} onBack={async () => {
                 setWorking(true);
                 try {
                   const open = await mobileAdminCancelFinalization(session.id);
@@ -294,7 +294,7 @@ export default function MobileAdminOperation() {
   );
 }
 
-function NumericField({ label, value, onChange }: { label: string; value: number | string; onChange: (value: string | number) => void }) {
+function NumericField({ label, value, onChange, disabled = false }: { label: string; value: number | string; onChange: (value: string | number) => void; disabled?: boolean }) {
   return (
     <label className="space-y-1 text-xs">
       <span className="text-slate-400">{label}</span>
@@ -305,7 +305,8 @@ function NumericField({ label, value, onChange }: { label: string; value: number
         value={numberValue(value)}
         onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
         placeholder="Informe"
-        className="mobile-input text-base"
+        disabled={disabled}
+        className={`mobile-input text-base ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       />
     </label>
   );
@@ -317,7 +318,8 @@ function FinalForm({
   canConfirm,
   working,
   onBack,
-  onConfirm
+  onConfirm,
+  activityCode
 }: {
   draft: MobileDraft['payload'];
   update: <K extends keyof MobileDraft['payload']>(key: K, value: MobileDraft['payload'][K]) => void;
@@ -325,14 +327,21 @@ function FinalForm({
   working: boolean;
   onBack: () => Promise<void>;
   onConfirm: () => Promise<void>;
+  activityCode: number;
 }) {
+  const requiresQuantities = [1, 2, 3].includes(activityCode);
+  const requiresList = activityCode === 1;
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <label className="space-y-1 text-xs"><span className="text-slate-400">Local *</span><input autoFocus value={draft.local} onChange={e => update('local', e.target.value)} className="mobile-input" /></label>
-        <label className="space-y-1 text-xs"><span className="text-slate-400">Lista</span><input value={draft.listId} onChange={e => update('listId', e.target.value)} className="mobile-input" /></label>
-        <NumericField label="Peças" value={draft.producedQuantity} onChange={v => update('producedQuantity', v)} />
-        <NumericField label="Itens" value={draft.itemsQuantity} onChange={v => update('itemsQuantity', v)} />
+        <label className="space-y-1 text-xs">
+          <span className="text-slate-400">{requiresList ? 'Lista *' : 'Lista'}</span>
+          <input value={draft.listId} onChange={e => update('listId', e.target.value)} disabled={!requiresList} className={`mobile-input ${!requiresList ? 'opacity-50 cursor-not-allowed' : ''}`} />
+        </label>
+        <NumericField label={requiresQuantities ? 'Peças *' : 'Peças'} value={draft.producedQuantity} onChange={v => update('producedQuantity', v)} disabled={!requiresQuantities} />
+        <NumericField label={requiresQuantities ? 'Itens *' : 'Itens'} value={draft.itemsQuantity} onChange={v => update('itemsQuantity', v)} disabled={!requiresQuantities} />
         <NumericField label="Paleteira" value={draft.palletJackId} onChange={v => update('palletJackId', String(v))} />
         <NumericField label="Empilhadeira" value={draft.forkliftId} onChange={v => update('forkliftId', String(v))} />
       </div>

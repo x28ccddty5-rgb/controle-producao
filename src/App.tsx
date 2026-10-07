@@ -556,7 +556,7 @@ const handleDeleteStoppageType = async (
     }
 
     if (!window.confirm(
-      `Excluir o usuário "${user.name}" (${user.username})? Esta ação remove a conta de autenticação e o perfil de acesso.`
+      `Excluir o acesso do usuário "${user.name}" (${user.username})? O acesso ao aplicativo será encerrado e os registros históricos serão preservados.`
     )) {
       return false;
     }
@@ -570,7 +570,20 @@ const handleDeleteStoppageType = async (
 
     if (error || !data?.success) {
       console.error('Erro ao excluir usuário:', error);
-      alert(data?.error || 'Não foi possível excluir o usuário.');
+
+      let serverMessage = data?.error as string | undefined;
+      const context = (error as { context?: Response } | null)?.context;
+
+      if (!serverMessage && context && typeof context.json === 'function') {
+        try {
+          const payload = await context.json() as { error?: string };
+          serverMessage = payload?.error;
+        } catch {
+          // Mantém a mensagem genérica quando a resposta da função não puder ser lida.
+        }
+      }
+
+      alert(serverMessage || error?.message || 'Não foi possível excluir o usuário.');
       return false;
     }
 
@@ -588,8 +601,13 @@ const handleDeleteStoppageType = async (
   });
 
   useEffect(() => {
-    if (sessionUser === 'administrador' && activeTab === 'USERS') {
-      loadManagedUsers();
+    const isMobileRoute = detectMobileMode();
+
+    if (
+      sessionUser === 'administrador' &&
+      (activeTab === 'USERS' || isMobileRoute)
+    ) {
+      void loadManagedUsers();
     }
   }, [sessionUser, activeTab]);
 
@@ -1670,6 +1688,51 @@ const handleDeleteStoppageType = async (
         userName={sessionUserName}
         onLogout={handleLogout}
         role={sessionUser}
+        databaseContent={
+          (sessionUser === 'administrador' || sessionUser === 'lideranca') ? (
+            <AdminPanel
+              collaborators={collaborators}
+              onAddCollaborator={async (name) => {
+                const success = await dbSaveCollaborator(name);
+                if (!success) return false;
+                const updated = [
+                  ...collaborators.filter(c => c.toLowerCase() !== name.toLowerCase()),
+                  name
+                ].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+                setCollaborators(updated);
+                localStorage.setItem('porto_collaborators', JSON.stringify(updated));
+                return true;
+              }}
+              onDeactivateCollaborator={async (name) => {
+                const success = await dbDeactivateCollaborator(name);
+                if (!success) return false;
+                const updated = collaborators.filter(c => c !== name);
+                setCollaborators(updated);
+                localStorage.setItem('porto_collaborators', JSON.stringify(updated));
+                return true;
+              }}
+              activitiesList={activitiesList}
+              onUpdateActivitiesList={setActivitiesList}
+              stoppagesList={stoppagesList}
+              onUpdateStoppagesList={setStoppagesList}
+              onCreateActivityType={handleCreateActivityType}
+              onDeleteActivityType={handleDeleteActivityType}
+              onCreateStoppageType={handleCreateStoppageType}
+              onDeleteStoppageType={handleDeleteStoppageType}
+            />
+          ) : null
+        }
+        userManagementContent={
+          sessionUser === 'administrador' ? (
+            <AdminUsersManagement
+              users={managedUsers}
+              currentUserName={sessionUserName}
+              loading={managedUsersLoading}
+              onCreateUser={handleCreateManagedUser}
+              onDeleteUser={handleDeleteManagedUser}
+            />
+          ) : null
+        }
       />
     );
   }
@@ -1946,6 +2009,7 @@ const handleDeleteStoppageType = async (
                   onQuickResolveStoppage={handleResolveStoppage}
                   onRefreshData={refreshOperationalData}
                   canViewJourneyMetrics={isAdmLoggedIn}
+                  canManageTargets={isAdmLoggedIn}
                 />
               )}
 

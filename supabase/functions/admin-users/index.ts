@@ -134,6 +134,7 @@ async function listUsers() {
   );
 
   const users = authUsers
+    .filter((authUser) => !(authUser as { deleted_at?: string | null }).deleted_at)
     .map((authUser) => {
       const profile = profileById.get(authUser.id);
       if (!profile) return null;
@@ -313,14 +314,17 @@ async function deleteUser(
     return json({ error: "A conta administrativa principal é protegida." }, 400);
   }
 
+  // O acesso é encerrado sem apagar o profile nem qualquer registro
+  // operacional/histórico. O soft delete do Auth mantém a identidade
+  // histórica e impede novo acesso à conta.
   const { error: deleteError } =
-    await supabaseAdmin.auth.admin.deleteUser(targetProfile.id);
+    await supabaseAdmin.auth.admin.deleteUser(targetProfile.id, true);
 
   if (deleteError) {
     console.error("Erro ao excluir usuário Auth:", deleteError);
     return json(
       { error: deleteError.message || "Não foi possível excluir o usuário." },
-      400,
+      409,
     );
   }
 

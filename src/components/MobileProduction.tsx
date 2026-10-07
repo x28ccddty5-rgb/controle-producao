@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity as ActivityIcon,
   AlertTriangle,
@@ -53,6 +53,8 @@ interface Props {
   userName: string;
   onLogout: () => void;
   role?: 'administrador' | 'lideranca' | 'apoio' | 'producao' | 'visualizador';
+  databaseContent?: ReactNode;
+  userManagementContent?: ReactNode;
 }
 
 type ActivityType = { id: string; code: number; label: string };
@@ -108,7 +110,13 @@ function contextTone(context: MobileContext) {
   }
 }
 
-export default function MobileProduction({ userName, onLogout, role = 'producao' }: Props) {
+export default function MobileProduction({
+  userName,
+  onLogout,
+  role = 'producao',
+  databaseContent,
+  userManagementContent
+}: Props) {
   const managementRole = role === 'administrador' || role === 'lideranca';
   const [collaborator, setCollaborator] = useState<MobileCollaborator | null>(null);
   const [shift, setShift] = useState<MobileShift | null>(null);
@@ -128,7 +136,7 @@ export default function MobileProduction({ userName, onLogout, role = 'producao'
   const [stoppageNotes, setStoppageNotes] = useState('');
   const [reason, setReason] = useState('');
   const [draftModalOpen, setDraftModalOpen] = useState(false);
-  const [mobileTab, setMobileTab] = useState<'PRODUCAO' | 'HISTORICO' | 'PLANEJAMENTO'>('PRODUCAO');
+  const [mobileTab, setMobileTab] = useState<'PRODUCAO' | 'HISTORICO' | 'PLANEJAMENTO' | 'BANCO' | 'USUARIOS'>('PRODUCAO');
   const [draftIncrement, setDraftIncrement] = useState({ pieces: '', items: '', pallet: '', forklift: '' });
   const draftLoadedSessionId = useRef<string | null>(null);
   const draftVersionRef = useRef(1);
@@ -506,10 +514,12 @@ export default function MobileProduction({ userName, onLogout, role = 'producao'
         </header>
 
         <nav className="sticky top-[73px] z-10 bg-slate-950 border-b border-slate-800 px-3 py-2">
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setMobileTab('PRODUCAO')} className={`rounded-xl py-2.5 text-[11px] font-bold ${mobileTab === 'PRODUCAO' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}>PRODUÇÃO</button>
-            <button type="button" onClick={() => setMobileTab('HISTORICO')} className={`rounded-xl py-2.5 text-[11px] font-bold ${mobileTab === 'HISTORICO' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}>HISTÓRICO</button>
-            {managementRole && <button type="button" onClick={() => setMobileTab('PLANEJAMENTO')} className={`rounded-xl py-2.5 text-[11px] font-bold ${mobileTab === 'PLANEJAMENTO' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}>PLANEJAMENTO</button>}
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <button type="button" onClick={() => setMobileTab('PRODUCAO')} className={`shrink-0 rounded-xl px-3 py-2.5 text-[11px] font-bold ${mobileTab === 'PRODUCAO' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}>PRODUÇÃO</button>
+            <button type="button" onClick={() => setMobileTab('HISTORICO')} className={`shrink-0 rounded-xl px-3 py-2.5 text-[11px] font-bold ${mobileTab === 'HISTORICO' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}>HISTÓRICO</button>
+            {managementRole && <button type="button" onClick={() => setMobileTab('PLANEJAMENTO')} className={`shrink-0 rounded-xl px-3 py-2.5 text-[11px] font-bold ${mobileTab === 'PLANEJAMENTO' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}>PLANEJAMENTO</button>}
+            {managementRole && databaseContent && <button type="button" onClick={() => setMobileTab('BANCO')} className={`shrink-0 rounded-xl px-3 py-2.5 text-[11px] font-bold ${mobileTab === 'BANCO' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}>BANCO DE DADOS</button>}
+            {role === 'administrador' && userManagementContent && <button type="button" onClick={() => setMobileTab('USUARIOS')} className={`shrink-0 rounded-xl px-3 py-2.5 text-[11px] font-bold ${mobileTab === 'USUARIOS' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}>USUÁRIOS</button>}
           </div>
         </nav>
 
@@ -519,6 +529,10 @@ export default function MobileProduction({ userName, onLogout, role = 'producao'
             <MobileHistory collaborator={collaborator} management={managementRole} />
           ) : mobileTab === 'PLANEJAMENTO' && managementRole ? (
             <ShiftPlanning compact />
+          ) : mobileTab === 'BANCO' && managementRole ? (
+            databaseContent
+          ) : mobileTab === 'USUARIOS' && role === 'administrador' ? (
+            userManagementContent
           ) : managementRole && mobileTab === 'PRODUCAO' ? (
             <MobileAdminOperation />
           ) : (
@@ -678,11 +692,16 @@ export default function MobileProduction({ userName, onLogout, role = 'producao'
                           <input value={draft.local} onChange={(e) => updateDraftField('local', e.target.value)} className="mobile-input" />
                         </label>
                         <label className="space-y-1 text-xs">
-                          <span className="text-slate-400">Lista</span>
-                          <input value={draft.listId} onChange={(e) => updateDraftField('listId', e.target.value)} className="mobile-input" />
+                          <span className="text-slate-400">{session.activity_code === 1 ? 'Lista *' : 'Lista'}</span>
+                          <input
+                            value={draft.listId}
+                            onChange={(e) => updateDraftField('listId', e.target.value)}
+                            disabled={session.activity_code !== 1}
+                            className={`mobile-input ${session.activity_code !== 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          />
                         </label>
                         <label className="space-y-1 text-xs">
-                          <span className="text-slate-400">Qtd. peças</span>
+                          <span className="text-slate-400">{[1, 2, 3].includes(session.activity_code) ? 'Qtd. peças *' : 'Qtd. peças'}</span>
                           <input
                             type="number"
                             min="0"
@@ -693,12 +712,13 @@ export default function MobileProduction({ userName, onLogout, role = 'producao'
                               'producedQuantity',
                               e.target.value === '' ? '' : Number(e.target.value)
                             )}
+                            disabled={!([1, 2, 3].includes(session.activity_code))}
                             placeholder="Informe"
-                            className="mobile-input text-base"
+                            className={`mobile-input text-base ${![1, 2, 3].includes(session.activity_code) ? 'opacity-50 cursor-not-allowed' : ''}`}
                           />
                         </label>
                         <label className="space-y-1 text-xs">
-                          <span className="text-slate-400">Qtd. itens</span>
+                          <span className="text-slate-400">{[1, 2, 3].includes(session.activity_code) ? 'Qtd. itens *' : 'Qtd. itens'}</span>
                           <input
                             type="number"
                             min="0"
@@ -708,8 +728,9 @@ export default function MobileProduction({ userName, onLogout, role = 'producao'
                               'itemsQuantity',
                               e.target.value === '' ? '' : Number(e.target.value)
                             )}
+                            disabled={!([1, 2, 3].includes(session.activity_code))}
                             placeholder="Informe"
-                            className="mobile-input text-base"
+                            className={`mobile-input text-base ${![1, 2, 3].includes(session.activity_code) ? 'opacity-50 cursor-not-allowed' : ''}`}
                           />
                         </label>
                         <label className="space-y-1 text-xs">

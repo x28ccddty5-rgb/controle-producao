@@ -1,6 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Activity, Stoppage } from '../types';
-import { mobileAdminGetDashboardJourney, MobileDashboardJourney } from '../mobileSupabase';
+import {
+  mobileAdminGetDashboardJourney,
+  mobileAdminListShiftPlans,
+  MobileDashboardJourney,
+  MobileShiftPlan
+} from '../mobileSupabase';
+import {
+  ActivityTarget,
+  dbFetchActivityTargets,
+  dbUpdateActivityTarget
+} from '../supabase';
 import {
   TrendingUp,
   Layers,
@@ -19,6 +29,7 @@ interface DashboardProps {
   onQuickResolveStoppage: (stoppageId: string) => void;
   onRefreshData: () => Promise<void>;
   canViewJourneyMetrics?: boolean;
+  canManageTargets?: boolean;
 }
 
 // Convert hours and minutes from decimal to "HHH:MM" format
@@ -32,6 +43,8 @@ function formatMinutesToHoursColon(minutes: number) {
 }
 
 // Helper to parse date representation from "DD/MM/YYYY" or "YYYY-MM-DD" to standard Date object
+const DASHBOARD_ACTIVITY_CODES = new Set([1, 2, 3]);
+
 function normalizeOperationalDate(str: string): string | null {
   if (!str) return null;
 
@@ -51,12 +64,27 @@ function normalizeOperationalDate(str: string): string | null {
   return null;
 }
 
+function saoPauloDateKey(value: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date(value));
+
+  const year = parts.find(part => part.type === 'year')?.value ?? '';
+  const month = parts.find(part => part.type === 'month')?.value ?? '';
+  const day = parts.find(part => part.type === 'day')?.value ?? '';
+  return `${year}-${month}-${day}`;
+}
+
 export default function Dashboard({
   activities,
   stoppages,
   onQuickResolveStoppage,
   onRefreshData,
-  canViewJourneyMetrics = false
+  canViewJourneyMetrics = false,
+  canManageTargets = false
 }: DashboardProps) {
   // --- 1. Date Interval Period State ---
   const [startDate, setStartDate] = useState(() => {
@@ -81,6 +109,89 @@ export default function Dashboard({
     total_overtime_minutes: 0
   });
   const [journeyLoading, setJourneyLoading] = useState(false);
+
+  const [activityTargets, setActivityTargets] = useState<ActivityTarget[]>([]);
+  const [targetsLoading, setTargetsLoading] = useState(false);
+  const [savingTargetCode, setSavingTargetCode] = useState<number | null>(null);
+  const [targetDrafts, setTargetDrafts] = useState<Record<number, string>>({});
+  const [targetNotice, setTargetNotice] = useState('');
+  const [shiftPlans, setShiftPlans] = useState<MobileShiftPlan[]>([]);
+  const [planningCollaborators, setPlanningCollaborators] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedCollaborator, setSelectedCollaborator] = useState('');
+  const [selectedActivityCode, setSelectedActivityCode] = useState<number | ''>('');
+
+  const loadActivityTargets = async () => {
+    setTargetsLoading(true);
+    try {
+      const data = await dbFetchActivityTargets();
+      if (data) {
+        setActivityTargets(data);
+        setTargetDrafts(
+          Object.fromEntries(
+            data.map(item => [item.code, item.targetPerHour === null ? '' : String(item.targetPerHour)])
+          )
+        );
+      }
+    } finally {
+      setTargetsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!canViewJourneyMetrics) return;
+    void loadActivityTargets();
+  }, [canViewJourneyMetrics]);
+
+  useEffect(() => {
+    if (!canViewJourneyMetrics || !startDate || !endDate || startDate > endDate) {
+      setShiftPlans([]);
+      setPlanningCollaborators([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    void mobileAdminListShiftPlans(startDate, endDate)
+      .then(result => {
+        if (!cancelled) {
+          setShiftPlans(result.plans);
+          setPlanningCollaborators(result.collaborators);
+        }
+      })
+      .catch(error => {
+        console.error('Falha ao carregar planejamento para horas extras:', error);
+        if (!cancelled) setShiftPlans([]);
+      })
+      .finally(() => {
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canViewJourneyMetrics, startDate, endDate]);
+
+  const saveTarget = async (code: number) => {
+    const raw = (targetDrafts[code] ?? '').trim().replace(',', '.');
+    const value = raw === '' ? null : Number(raw);
+
+    if (value !== null && (!Number.isFinite(value) || value < 0)) {
+      setTargetNotice('Informe uma meta válida, igual ou maior que zero.');
+      return;
+    }
+
+    setSavingTargetCode(code);
+    setTargetNotice('');
+    const success = await dbUpdateActivityTarget(code, value);
+    if (success) {
+      setActivityTargets(current => current.map(item =>
+        item.code === code ? { ...item, targetPerHour: value } : item
+      ));
+      setTargetNotice('Metas atualizadas com sucesso.');
+    } else {
+      setTargetNotice('Não foi possível salvar a meta.');
+    }
+    setSavingTargetCode(null);
+  };
 
   // Trigger period updates quickly
   const handleQuickPeriodSelect = (period: string) => {
@@ -235,9 +346,9 @@ export default function Dashboard({
   }, [filteredActivities]);
 
   // --- 4. Productivity by collaborator ---
-  // This metric deliberately uses only official activity/stoppage records already
-  // available to the Desktop dashboard. Shift-level transition/overtime will be
-  // added when the dashboard consumes the mobile journey source directly.
+  // Peças e peças/h são calculadas por colaborador + setor.
+  // Somar setores diferentes em uma única taxa distorceria a comparação,
+  // porque cada setor possui uma meta própria.
   const collaboratorEfficiency = useMemo(() => {
     const operators = new Set<string>();
     filteredActivities.forEach(activity => operators.add(activity.operator));
@@ -254,62 +365,222 @@ export default function Dashboard({
 
       const recordedMinutes = activityMinutes + stoppageMinutes;
       const efficiency = recordedMinutes > 0 ? (activityMinutes / recordedMinutes) * 100 : 0;
-      const pieces = filteredActivities
-        .filter(activity => activity.operator === operator)
-        .reduce((sum, activity) => sum + (activity.producedQuantity || 0), 0);
-      const items = filteredActivities
-        .filter(activity => activity.operator === operator)
-        .reduce((sum, activity) => sum + (activity.itemsQuantity || 0), 0);
 
       return {
         operator,
         activityMinutes,
         stoppageMinutes,
         recordedMinutes,
-        efficiency,
-        pieces,
-        items,
-        piecesPerHour: activityMinutes > 0 ? pieces / (activityMinutes / 60) : 0
+        efficiency
       };
     }).sort((a, b) => b.recordedMinutes - a.recordedMinutes);
   }, [filteredActivities, filteredStoppages]);
 
-  // --- 5. Ritmo por setor x metas operacionais existentes ---
-  const dynamicSectorStats = useMemo(() => {
-    const sectorsDef = [
-      { code: 1, label: 'Separação', meta: 1458 },
-      { code: 2, label: 'Armazenamento', meta: 1388 },
-      { code: 3, label: 'Remontar Picadeiras', meta: 42 }
-    ];
+  const productionCollaborators = useMemo(() => {
+    const names = new Set<string>(
+      filteredActivities
+        .filter(activity =>
+          DASHBOARD_ACTIVITY_CODES.has(activity.activityCode) &&
+          activity.status === 'CONCLUIDO'
+        )
+        .map(activity => activity.operator)
+    );
 
-    return sectorsDef.map(sec => {
-      const records = filteredActivities.filter(
-        activity => activity.activityCode === sec.code && activity.status === 'CONCLUIDO'
-      );
-      const totalPieces = records.reduce(
-        (sum, record) => sum + (record.producedQuantity || 0),
-        0
-      );
-      const productiveMinutes = records.reduce(
-        (sum, record) => sum + ((record.durationHours || 0) * 60),
-        0
-      );
-      const avgRate = productiveMinutes > 0
-        ? totalPieces / (productiveMinutes / 60)
-        : 0;
-      const pctOfMeta = sec.meta > 0 ? (avgRate / sec.meta) * 100 : 0;
-
-      return {
-        ...sec,
-        avgRate,
-        pctOfMeta: Math.min(Math.max(pctOfMeta, 0), 100),
-        excelPctOfMeta: pctOfMeta > 100 ? Math.min(pctOfMeta - 100, 50) : 0,
-        realPctOfMeta: pctOfMeta,
-        totalPieces,
-        productiveMinutes
-      };
-    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [filteredActivities]);
+
+  const collaboratorSectorMetrics = useMemo(() => {
+    const targetByCode = new Map<number, ActivityTarget>(
+      activityTargets
+        .filter(item =>
+          DASHBOARD_ACTIVITY_CODES.has(item.code) &&
+          item.targetPerHour !== null &&
+          item.targetPerHour > 0
+        )
+        .map(item => [item.code, item])
+    );
+
+    return filteredActivities
+      .filter(activity =>
+        activity.status === 'CONCLUIDO' &&
+        targetByCode.has(activity.activityCode) &&
+        (!selectedCollaborator || activity.operator === selectedCollaborator) &&
+        (!selectedActivityCode || activity.activityCode === selectedActivityCode)
+      )
+      .reduce<Array<{
+        operator: string;
+        code: number;
+        label: string;
+        targetPerHour: number;
+        pieces: number;
+        productiveMinutes: number;
+        piecesPerHour: number;
+        targetPercent: number;
+      }>>((rows, activity) => {
+        const target = targetByCode.get(activity.activityCode)!;
+        const key = `${activity.operator}::${activity.activityCode}`;
+        const existing = rows.find(row => `${row.operator}::${row.code}` === key);
+        const minutes = (activity.durationHours || 0) * 60;
+
+        if (existing) {
+          existing.pieces += activity.producedQuantity || 0;
+          existing.productiveMinutes += minutes;
+          existing.piecesPerHour = existing.productiveMinutes > 0
+            ? existing.pieces / (existing.productiveMinutes / 60)
+            : 0;
+          existing.targetPercent = (existing.piecesPerHour / existing.targetPerHour) * 100;
+        } else {
+          const pieces = activity.producedQuantity || 0;
+          const productiveMinutes = minutes;
+          const piecesPerHour = productiveMinutes > 0 ? pieces / (productiveMinutes / 60) : 0;
+          rows.push({
+            operator: activity.operator,
+            code: activity.activityCode,
+            label: target.label,
+            targetPerHour: target.targetPerHour!,
+            pieces,
+            productiveMinutes,
+            piecesPerHour,
+            targetPercent: (piecesPerHour / target.targetPerHour!) * 100
+          });
+        }
+
+        return rows;
+      }, [])
+      .sort((a, b) => b.targetPercent - a.targetPercent);
+  }, [filteredActivities, activityTargets, selectedCollaborator, selectedActivityCode]);
+
+  // --- 5. Ritmo por setor x metas cadastradas ---
+  const dynamicSectorStats = useMemo(() => {
+    return activityTargets
+      .filter(sec =>
+        DASHBOARD_ACTIVITY_CODES.has(sec.code) &&
+        sec.targetPerHour !== null &&
+        sec.targetPerHour > 0
+      )
+      .map(sec => {
+        const records = filteredActivities.filter(
+          activity => activity.activityCode === sec.code && activity.status === 'CONCLUIDO'
+        );
+        const totalPieces = records.reduce(
+          (sum, record) => sum + (record.producedQuantity || 0),
+          0
+        );
+        const productiveMinutes = records.reduce(
+          (sum, record) => sum + ((record.durationHours || 0) * 60),
+          0
+        );
+        const avgRate = productiveMinutes > 0
+          ? totalPieces / (productiveMinutes / 60)
+          : 0;
+        const realPctOfMeta = sec.targetPerHour ? (avgRate / sec.targetPerHour) * 100 : 0;
+
+        return {
+          ...sec,
+          meta: sec.targetPerHour!,
+          avgRate,
+          pctOfMeta: Math.min(Math.max(realPctOfMeta, 0), 100),
+          excelPctOfMeta: realPctOfMeta > 100 ? Math.min(realPctOfMeta - 100, 50) : 0,
+          realPctOfMeta,
+          totalPieces,
+          productiveMinutes
+        };
+      });
+  }, [filteredActivities, activityTargets]);
+
+  const batchOvertime = useMemo(() => {
+    const mobileOperators = new Set(
+      journeyMetrics.rows.map(row => row.collaborator_name.trim().toLocaleLowerCase())
+    );
+
+    const collaboratorNameById = new Map(
+      planningCollaborators.map(collaborator => [collaborator.id, collaborator.name])
+    );
+
+    const plannedMinutesByOperatorDay = new Map<string, number>();
+
+    shiftPlans.forEach(plan => {
+      const collaboratorName = collaboratorNameById.get(plan.collaborator_id) as string | undefined;
+      if (!collaboratorName) return;
+
+      const startMs = Date.parse(plan.planned_start_at);
+      const endMs = Date.parse(plan.planned_end_at);
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return;
+
+      // Planning time is the source of truth when it exists. The operational
+      // paid threshold removes the standard 30-minute lunch interval.
+      const plannedPaidMinutes = Math.max(
+        0,
+        Math.round((endMs - startMs) / 60000) - 30
+      );
+
+      const dayKey = saoPauloDateKey(plan.planned_start_at);
+      const key = `${collaboratorName.trim()}::${dayKey}`;
+      plannedMinutesByOperatorDay.set(
+        key,
+        (plannedMinutesByOperatorDay.get(key) || 0) + plannedPaidMinutes
+      );
+    });
+
+    const byOperatorDay = new Map<string, number>();
+
+    filteredActivities.forEach(activity => {
+      const key = `${activity.operator}::${normalizeOperationalDate(activity.date) || activity.date}`;
+      byOperatorDay.set(
+        key,
+        (byOperatorDay.get(key) || 0) +
+          Math.round((activity.durationHours || 0) * 60)
+      );
+    });
+
+    filteredStoppages.forEach(stoppage => {
+      const key = `${stoppage.operator}::${normalizeOperationalDate(stoppage.date) || stoppage.date}`;
+      byOperatorDay.set(
+        key,
+        (byOperatorDay.get(key) || 0) + (stoppage.durationMinutes || 0)
+      );
+    });
+
+    const byOperator = new Map<string, number>();
+
+    for (const [key, minutes] of byOperatorDay.entries()) {
+      const separatorIndex = key.indexOf('::');
+      const operator = separatorIndex >= 0 ? key.slice(0, separatorIndex) : key;
+      const dateKey = separatorIndex >= 0 ? key.slice(separatorIndex + 2) : '';
+
+      // A collaborator whose official Mobile journey exists in the period
+      // already has overtime calculated from the server-side shift record.
+      // Do not count that same collaborator again from legacy batch records.
+      if (mobileOperators.has(operator.trim().toLocaleLowerCase())) continue;
+
+      const plannedThreshold = plannedMinutesByOperatorDay.get(
+        `${operator.trim()}::${dateKey}`
+      );
+
+      // Legacy batch entries without a corresponding schedule use the
+      // established 7h30 paid-day fallback.
+      const threshold = plannedThreshold ?? 450;
+      const overtime = Math.max(0, minutes - threshold);
+
+      byOperator.set(
+        operator,
+        (byOperator.get(operator) || 0) + overtime
+      );
+    }
+
+    return {
+      total: Array.from(byOperator.values()).reduce((sum, value) => sum + value, 0),
+      byOperator
+    };
+  }, [
+    filteredActivities,
+    filteredStoppages,
+    journeyMetrics.rows,
+    planningCollaborators,
+    shiftPlans
+  ]);
+
+  const totalOvertimeMinutes = journeyMetrics.total_overtime_minutes + batchOvertime.total;
 
   // --- 9. Pareto Stoppages downtime list ---
   const stoppagesParetoRaw = useMemo(() => {
@@ -424,6 +695,49 @@ export default function Dashboard({
         </div>
       )}
 
+      {canManageTargets && (
+        <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs" id="dashboard-target-editor">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Configuração</p>
+              <h2 className="text-sm font-extrabold text-slate-800">Metas operacionais</h2>
+              <p className="text-[10px] text-slate-400 mt-1">Somente as atividades 1, 2 e 3 possuem meta neste painel. Alterações são salvas no banco e refletem no Dashboard.</p>
+            </div>
+            {targetsLoading && <span className="text-[10px] text-slate-400">Carregando...</span>}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {activityTargets.filter(target => DASHBOARD_ACTIVITY_CODES.has(target.code)).map(target => (
+              <div key={target.code} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-bold text-slate-700">{target.code} • {target.label}</div>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400">pç/h</span>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={targetDrafts[target.code] ?? ''}
+                    onChange={event => setTargetDrafts(current => ({ ...current, [target.code]: event.target.value }))}
+                    className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-mono outline-none focus:border-blue-500"
+                    placeholder="Sem meta"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void saveTarget(target.code)}
+                    disabled={savingTargetCode === target.code}
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-[10px] font-bold text-white disabled:opacity-60"
+                  >
+                    {savingTargetCode === target.code ? '...' : 'SALVAR'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {targetNotice && <div className="mt-3 text-xs text-slate-500">{targetNotice}</div>}
+        </section>
+      )}
+
       {/* SECTION: Jornada e operação */}
       <section className="space-y-3" id="dashboard-hours-indicators">
         <div className="flex items-center justify-between px-1">
@@ -478,7 +792,7 @@ export default function Dashboard({
               <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600">Horas extras</p>
               <div className="mt-2 flex items-end justify-between gap-2">
                 <span className="text-2xl xl:text-3xl font-extrabold text-orange-600 font-mono">
-                  {journeyLoading ? '—:—' : formatMinutesToHoursColon(journeyMetrics.total_overtime_minutes)}
+                  {journeyLoading ? '—:—' : formatMinutesToHoursColon(totalOvertimeMinutes)}
                 </span>
                 <Clock className="h-4 w-4 text-orange-500 shrink-0 mb-1" />
               </div>
@@ -580,46 +894,124 @@ export default function Dashboard({
             Nenhum colaborador com registros no período selecionado.
           </div>
         ) : (
-          <div className="max-h-[42vh] overflow-auto border border-slate-200 rounded-xl">
-            <table className="w-full text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
-                <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider">
-                  <th className="px-3 py-3">Colaborador</th>
-                  <th className="px-3 py-3 text-right">Tempo produtivo</th>
-                  <th className="px-3 py-3 text-right">Paradas</th>
-                  <th className="px-3 py-3 text-right">Tempo registrado</th>
-                  <th className="px-3 py-3 text-right">Eficiência</th>
-                  <th className="px-3 py-3 text-right">Horas extras</th>
-                  <th className="px-3 py-3 text-right">Peças</th>
-                  <th className="px-3 py-3 text-right">Peças/h</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {collaboratorEfficiency.map(row => {
-                  const journey = journeyMetrics.rows.find(item => item.collaborator_name.toLocaleLowerCase() === row.operator.toLocaleLowerCase());
-                  return (
-                  <tr key={row.operator} className="hover:bg-slate-50">
-                    <td className="px-3 py-3 font-bold text-slate-900 whitespace-nowrap">{row.operator}</td>
-                    <td className="px-3 py-3 text-right font-mono">{formatMinutesToHoursColon(row.activityMinutes)}</td>
-                    <td className="px-3 py-3 text-right font-mono text-red-600">{formatMinutesToHoursColon(row.stoppageMinutes)}</td>
-                    <td className="px-3 py-3 text-right font-mono font-semibold">{formatMinutesToHoursColon(row.recordedMinutes)}</td>
-                    <td className="px-3 py-3 text-right">
-                      <span className="inline-flex min-w-[64px] justify-center rounded-full bg-emerald-50 px-2 py-1 font-bold font-mono text-emerald-700">
-                        {row.efficiency.toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-right font-mono text-orange-600">
-                      {journey ? formatMinutesToHoursColon(journey.overtime_minutes) : '—'}
-                    </td>
-                    <td className="px-3 py-3 text-right font-mono">{row.pieces.toLocaleString('pt-BR')}</td>
-                    <td className="px-3 py-3 text-right font-mono">{row.piecesPerHour.toFixed(1)}</td>
+          <div className="space-y-4">
+            <div className="max-h-[34vh] overflow-auto border border-slate-200 rounded-xl">
+              <table className="w-full min-w-[900px] text-left text-xs">
+                <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
+                  <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider">
+                    <th className="px-3 py-3">Colaborador</th>
+                    <th className="px-3 py-3 text-right">Tempo produtivo</th>
+                    <th className="px-3 py-3 text-right">Paradas</th>
+                    <th className="px-3 py-3 text-right">Tempo registrado</th>
+                    <th className="px-3 py-3 text-right">Eficiência</th>
+                    <th className="px-3 py-3 text-right">Horas extras</th>
                   </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {collaboratorEfficiency.map(row => {
+                    const journey = journeyMetrics.rows.find(item => item.collaborator_name.toLocaleLowerCase() === row.operator.toLocaleLowerCase());
+                    const rowOvertime = journey ? journey.overtime_minutes : (batchOvertime.byOperator.get(row.operator) || 0);
+                    return (
+                      <tr key={row.operator} className="hover:bg-slate-50">
+                        <td className="px-3 py-3 font-bold text-slate-900 whitespace-nowrap">{row.operator}</td>
+                        <td className="px-3 py-3 text-right font-mono">{formatMinutesToHoursColon(row.activityMinutes)}</td>
+                        <td className="px-3 py-3 text-right font-mono text-red-600">{formatMinutesToHoursColon(row.stoppageMinutes)}</td>
+                        <td className="px-3 py-3 text-right font-mono font-semibold">{formatMinutesToHoursColon(row.recordedMinutes)}</td>
+                        <td className="px-3 py-3 text-right">
+                          <span className="inline-flex min-w-[64px] justify-center rounded-full bg-emerald-50 px-2 py-1 font-bold font-mono text-emerald-700">
+                            {row.efficiency.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-orange-600">{formatMinutesToHoursColon(rowOvertime)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-3">
+                <div>
+                  <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-600">Produção por colaborador e atividade</h4>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Peças/h e % da meta são calculados separadamente dentro de cada atividade.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full lg:w-auto lg:min-w-[430px]">
+                  <label className="text-[10px] font-bold text-slate-500">
+                    Colaborador
+                    <select
+                      value={selectedCollaborator}
+                      onChange={event => setSelectedCollaborator(event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 outline-none focus:border-blue-500"
+                    >
+                      <option value="">Todos</option>
+                      {productionCollaborators.map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-[10px] font-bold text-slate-500">
+                    Atividade
+                    <select
+                      value={selectedActivityCode === '' ? '' : String(selectedActivityCode)}
+                      onChange={event => setSelectedActivityCode(event.target.value === '' ? '' : Number(event.target.value))}
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 outline-none focus:border-blue-500"
+                    >
+                      <option value="">Todas</option>
+                      {activityTargets
+                        .filter(target => DASHBOARD_ACTIVITY_CODES.has(target.code))
+                        .map(target => (
+                          <option key={target.code} value={target.code}>
+                            {target.code} • {target.label}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+              {collaboratorSectorMetrics.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-400 border border-slate-200 rounded-xl">Nenhuma atividade com meta cadastrada no período.</div>
+              ) : (
+                <div className="max-h-[34vh] overflow-auto border border-slate-200 rounded-xl">
+                  <table className="w-full min-w-[920px] text-left text-xs">
+                    <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
+                      <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider">
+                        <th className="px-3 py-3">Colaborador</th>
+                        <th className="px-3 py-3">Setor</th>
+                        <th className="px-3 py-3 text-right">Peças</th>
+                        <th className="px-3 py-3 text-right">Tempo</th>
+                        <th className="px-3 py-3 text-right">Peças/h</th>
+                        <th className="px-3 py-3 text-right">Meta</th>
+                        <th className="px-3 py-3 text-right">% da meta</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {collaboratorSectorMetrics.map(row => (
+                        <tr key={`${row.operator}-${row.code}`} className="hover:bg-slate-50">
+                          <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">{row.operator}</td>
+                          <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{row.code} • {row.label}</td>
+                          <td className="px-3 py-2.5 text-right font-mono">{row.pieces.toLocaleString('pt-BR')}</td>
+                          <td className="px-3 py-2.5 text-right font-mono">{formatMinutesToHoursColon(row.productiveMinutes)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono font-bold">{row.piecesPerHour.toFixed(1)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-slate-500">{row.targetPerHour.toLocaleString('pt-BR')} pç/h</td>
+                          <td className="px-3 py-2.5 text-right">
+                            <span className={`inline-flex min-w-[70px] justify-center rounded-full px-2 py-1 font-bold font-mono ${
+                              row.targetPercent >= 100 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                            }`}>
+                              {row.targetPercent.toFixed(1)}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            </div>
+          )}
       </div>
 
       {/* SECTION: Ritmo e meta por setor */}
@@ -768,11 +1160,11 @@ export default function Dashboard({
           </div>
           <div className="flex items-start gap-2">
             <span className="text-emerald-600 font-bold mt-0.5">02</span>
-            <p><strong>Ritmo por setor</strong> preserva as metas operacionais já existentes e não cria uma nova regra de produtividade.</p>
+            <p><strong>Ritmo x meta</strong> usa a meta cadastrada por setor no banco. Peças/h do colaborador é calculada separadamente por setor para não misturar unidades e metas diferentes.</p>
           </div>
           <div className="flex items-start gap-2">
             <span className="text-amber-600 font-bold mt-0.5">03</span>
-            <p><strong>Horas extras e transição</strong> não são estimadas por lacunas entre lançamentos. Esses indicadores precisam usar os eventos oficiais da jornada Mobile para não misturar almoço, ausência ou tempo não alocado.</p>
+            <p><strong>Horas extras</strong> usam a jornada Mobile quando disponível. Para lançamentos em lote sem jornada Mobile, o fallback é o excedente diário sobre 7h30 de tempo registrado.</p>
           </div>
         </div>
       </div>

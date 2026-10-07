@@ -369,6 +369,57 @@ export async function dbFetchActiveStoppages(): Promise<Stoppage[] | null> {
   }
 }
 
+
+export interface ActivityTarget {
+  code: number;
+  label: string;
+  targetPerHour: number | null;
+}
+
+export async function dbFetchActivityTargets(): Promise<ActivityTarget[] | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase.rpc('dashboard_get_activity_targets');
+    if (error) {
+      console.error('Error fetching activity targets:', error);
+      return null;
+    }
+
+    return (Array.isArray(data) ? data : []).map((item: any) => ({
+      code: Number(item.code),
+      label: String(item.label ?? ''),
+      targetPerHour: item.target_per_hour === null || item.target_per_hour === undefined
+        ? null
+        : Number(item.target_per_hour)
+    }));
+  } catch (err) {
+    console.error('Supabase activity targets query failed:', err);
+    return null;
+  }
+}
+
+export async function dbUpdateActivityTarget(code: number, targetPerHour: number | null): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase.rpc('dashboard_update_activity_target', {
+      p_activity_code: code,
+      p_target_per_hour: targetPerHour
+    });
+
+    if (error) {
+      console.error('Error updating activity target:', error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Supabase activity target update failed:', err);
+    return false;
+  }
+}
+
 export async function dbFetchActivityTypes() {
   if (!supabase) return null;
 

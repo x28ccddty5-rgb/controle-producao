@@ -269,7 +269,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({
                 Usuários cadastrados ({users.length})
               </h3>
               <p className="text-xs text-slate-400">
-                Contas Auth vinculadas a <code>public.profiles</code>.
+                Contas com acesso ao sistema vinculadas a <code>public.profiles</code>.
               </p>
             </div>
             {loading && (
@@ -319,7 +319,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({
                               className="inline-flex items-center gap-1.5 border border-slate-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-600 rounded-md px-2.5 py-1.5 text-[10px] font-bold transition"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              Excluir
+                              Excluir acesso
                             </button>
                           )}
                         </td>
