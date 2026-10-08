@@ -12,11 +12,14 @@ import {
   Pencil,
   PowerOff,
   Search,
+  Trash2,
   X
 } from 'lucide-react';
 import {
   dbAdminCorrectActivityHistory,
   dbAdminCorrectStoppageHistory,
+  dbAdminDeleteActivityHistory,
+  dbAdminDeleteStoppageHistory,
   dbFetchActivityHistoryPage,
   dbFetchStoppageHistoryPage,
   HistoryPageResult
@@ -35,6 +38,23 @@ interface HistoryLogsProps {
 type SheetTab = 'ACTIVITIES' | 'STOPPAGES';
 
 const PAGE_SIZE = 20;
+
+const displayDateToInput = (date: string): string => {
+  const parts = date?.split('/');
+  if (!parts || parts.length !== 3) return '';
+  const [day, month, year] = parts;
+  if (!/^\d{2}$/.test(day) || !/^\d{2}$/.test(month) || !/^\d{4}$/.test(year)) return '';
+  return `${year}-${month}-${day}`;
+};
+
+const inputDateToDisplay = (date: string): string => {
+  const parts = date?.split('-');
+  if (!parts || parts.length !== 3) return '';
+  const [year, month, day] = parts;
+  if (!/^\d{4}$/.test(year) || !/^\d{2}$/.test(month) || !/^\d{2}$/.test(day)) return '';
+  return `${day}/${month}/${year}`;
+};
+
 
 const ACTIVITY_OPTIONS = [
   [1, '1 - Separação'],
@@ -337,8 +357,13 @@ export default function HistoryLogs({
     setNotice('');
     try {
       const updated = await dbAdminCorrectActivityHistory(editingActivity.id, {
+        date: editingActivity.date,
+        operator: editingActivity.operator,
+        activity_code: editingActivity.activityCode,
         local: editingActivity.local,
         list_id: editingActivity.listId,
+        start_time: editingActivity.startTime,
+        end_time: editingActivity.endTime,
         pallet_jack_id: editingActivity.palletJackId,
         forklift_id: editingActivity.forkliftId,
         produced_quantity: editingActivity.producedQuantity,
@@ -351,11 +376,42 @@ export default function HistoryLogs({
         ...current,
         items: current.items.map(item => item.id === updated.id ? updated : item)
       }));
-      setNotice('Correção de atividade salva com auditoria.');
+      setNotice('Lançamento de atividade atualizado com auditoria.');
       setEditingActivity(null);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Não foi possível salvar a correção.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteActivity = async (activity: Activity) => {
+    if (!window.confirm(
+      `Excluir definitivamente o lançamento da atividade ${activity.activityCode} de ${activity.operator}? Esta ação remove o lançamento operacional. A auditoria da exclusão será preservada.`
+    )) {
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const success = await dbAdminDeleteActivityHistory(activity.id);
+      if (!success) {
+        throw new Error('O banco não confirmou a exclusão. O lançamento pode estar vinculado ao Mobile ou ainda estar em andamento.');
+      }
+
+      setActivitiesPage(current => ({
+        items: current.items.filter(item => item.id !== activity.id),
+        totalCount: Math.max(0, current.totalCount - 1)
+      }));
+      setNotice('Lançamento de atividade excluído. A auditoria da exclusão foi preservada.');
+      setEditingActivity(null);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Não foi possível excluir o lançamento.');
     } finally {
       setSaving(false);
     }
@@ -368,6 +424,11 @@ export default function HistoryLogs({
     setNotice('');
     try {
       const updated = await dbAdminCorrectStoppageHistory(editingStoppage.id, {
+        date: editingStoppage.date,
+        operator: editingStoppage.operator,
+        stoppage_code: editingStoppage.stoppageCode,
+        start_time: editingStoppage.startTime,
+        end_time: editingStoppage.endTime,
         notes: editingStoppage.notes,
         resolution_notes: editingStoppage.resolutionNotes
       });
@@ -377,11 +438,42 @@ export default function HistoryLogs({
         ...current,
         items: current.items.map(item => item.id === updated.id ? updated : item)
       }));
-      setNotice('Correção de parada salva com auditoria.');
+      setNotice('Lançamento de parada atualizado com auditoria.');
       setEditingStoppage(null);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Não foi possível salvar a correção.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteStoppage = async (stoppage: Stoppage) => {
+    if (!window.confirm(
+      `Excluir definitivamente o lançamento da parada ${stoppage.stoppageCode} de ${stoppage.operator}? Esta ação remove o lançamento operacional. A auditoria da exclusão será preservada.`
+    )) {
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const success = await dbAdminDeleteStoppageHistory(stoppage.id);
+      if (!success) {
+        throw new Error('O banco não confirmou a exclusão. Uma parada ativa não pode ser excluída por este fluxo.');
+      }
+
+      setStoppagesPage(current => ({
+        items: current.items.filter(item => item.id !== stoppage.id),
+        totalCount: Math.max(0, current.totalCount - 1)
+      }));
+      setNotice('Lançamento de parada excluído. A auditoria da exclusão foi preservada.');
+      setEditingStoppage(null);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Não foi possível excluir o lançamento.');
     } finally {
       setSaving(false);
     }
@@ -509,9 +601,14 @@ export default function HistoryLogs({
                     <td className="py-3 px-3 text-right font-mono font-bold">{act.itemsQuantity.toLocaleString('pt-BR')}</td>
                     {isAdmin && (
                       <td className="py-2 px-3 text-center">
-                        <button onClick={() => setEditingActivity({ ...act })} className="p-2 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50" title="Corrigir lançamento">
-                          <Pencil className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button onClick={() => setEditingActivity({ ...act })} className="p-2 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50" title="Editar lançamento completo">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => void deleteActivity(act)} className="p-2 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50" title="Excluir lançamento">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -546,9 +643,14 @@ export default function HistoryLogs({
                     <td className="py-3 px-3 max-w-[24rem] truncate" title={stop.notes || ''}>{stop.notes || '-'}</td>
                     {isAdmin && (
                       <td className="py-2 px-3 text-center">
-                        <button onClick={() => setEditingStoppage({ ...stop })} className="p-2 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50" title="Corrigir lançamento">
-                          <Pencil className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button onClick={() => setEditingStoppage({ ...stop })} className="p-2 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50" title="Editar lançamento completo">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => void deleteStoppage(stop)} className="p-2 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50" title="Excluir lançamento">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -578,27 +680,78 @@ export default function HistoryLogs({
 
       {editingActivity && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 p-4 flex items-center justify-center">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white border border-slate-200 shadow-2xl">
+          <div className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white border border-slate-200 shadow-2xl">
             <div className="p-5 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-[10px] uppercase tracking-widest text-blue-600 font-bold">Correção pontual</div>
-                <h3 className="text-lg font-bold text-slate-900">Atividade {editingActivity.activityCode} • {editingActivity.operator}</h3>
-                <p className="text-xs text-slate-500 mt-1">O registro original permanece identificado e a alteração gera auditoria.</p>
+                <div className="text-[10px] uppercase tracking-widest text-blue-600 font-bold">Correção administrativa</div>
+                <h3 className="text-lg font-bold text-slate-900">Editar lançamento completo</h3>
+                <p className="text-xs text-slate-500 mt-1">Data, colaborador, atividade, local, horários, movimentadores, quantidades e observações.</p>
               </div>
               <button onClick={() => setEditingActivity(null)} className="p-2 rounded-lg border border-slate-200"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5 grid grid-cols-2 gap-4">
-              <label className="text-xs font-semibold text-slate-500 col-span-2">Local<input value={editingActivity.local} onChange={e => setEditingActivity(v => v ? { ...v, local: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
-              <label className="text-xs font-semibold text-slate-500">Lista<input value={editingActivity.listId || ''} onChange={e => setEditingActivity(v => v ? { ...v, listId: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
-              <label className="text-xs font-semibold text-slate-500">Peças<input type="number" min={0} value={editingActivity.producedQuantity} onChange={e => setEditingActivity(v => v ? { ...v, producedQuantity: Number(e.target.value) } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" /></label>
-              <label className="text-xs font-semibold text-slate-500">Itens<input type="number" min={0} value={editingActivity.itemsQuantity} onChange={e => setEditingActivity(v => v ? { ...v, itemsQuantity: Number(e.target.value) } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" /></label>
-              <label className="text-xs font-semibold text-slate-500">Paleteira<input value={editingActivity.palletJackId || ''} onChange={e => setEditingActivity(v => v ? { ...v, palletJackId: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
-              <label className="text-xs font-semibold text-slate-500">Empilhadeira<input value={editingActivity.forkliftId || ''} onChange={e => setEditingActivity(v => v ? { ...v, forkliftId: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
-              <label className="text-xs font-semibold text-slate-500 col-span-2">Observação<textarea rows={3} value={editingActivity.notes || ''} onChange={e => setEditingActivity(v => v ? { ...v, notes: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
+
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="text-xs font-semibold text-slate-500">Data
+                <input type="date" value={displayDateToInput(editingActivity.date)} onChange={e => setEditingActivity(v => v ? { ...v, date: inputDateToDisplay(e.target.value) } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Colaborador
+                <select value={editingActivity.operator} onChange={e => setEditingActivity(v => v ? { ...v, operator: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                  {Array.from(new Set([editingActivity.operator, ...collaborators].filter(Boolean))).map(operator => (
+                    <option key={operator} value={operator}>{operator}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Atividade
+                <select value={editingActivity.activityCode} onChange={e => setEditingActivity(v => v ? { ...v, activityCode: Number(e.target.value) } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                  {ACTIVITY_OPTIONS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                </select>
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Local
+                <input value={editingActivity.local} onChange={e => setEditingActivity(v => v ? { ...v, local: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Lista
+                <input value={editingActivity.listId || ''} onChange={e => setEditingActivity(v => v ? { ...v, listId: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Horário inicial
+                <input type="time" value={editingActivity.startTime} onChange={e => setEditingActivity(v => v ? { ...v, startTime: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Horário final
+                <input type="time" value={editingActivity.endTime || ''} onChange={e => setEditingActivity(v => v ? { ...v, endTime: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Mov. Paleteira
+                <input value={editingActivity.palletJackId || ''} onChange={e => setEditingActivity(v => v ? { ...v, palletJackId: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Mov. Empilhadeira
+                <input value={editingActivity.forkliftId || ''} onChange={e => setEditingActivity(v => v ? { ...v, forkliftId: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Peças
+                <input type="number" min={0} value={editingActivity.producedQuantity} onChange={e => setEditingActivity(v => v ? { ...v, producedQuantity: Number(e.target.value) } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Itens
+                <input type="number" min={0} value={editingActivity.itemsQuantity} onChange={e => setEditingActivity(v => v ? { ...v, itemsQuantity: Number(e.target.value) } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500 md:col-span-2">Observação
+                <textarea rows={3} value={editingActivity.notes || ''} onChange={e => setEditingActivity(v => v ? { ...v, notes: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </label>
             </div>
-            <div className="p-5 border-t border-slate-200 flex justify-end gap-3">
-              <button onClick={() => setEditingActivity(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm">Cancelar</button>
-              <button onClick={() => void saveActivity()} disabled={saving} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold flex items-center gap-2"><Check className="w-4 h-4" />{saving ? 'Salvando...' : 'Salvar correção'}</button>
+
+            <div className="p-5 border-t border-slate-200 flex justify-between gap-3">
+              <button onClick={() => void deleteActivity(editingActivity)} disabled={saving} className="px-4 py-2 rounded-lg border border-rose-200 text-rose-600 text-sm flex items-center gap-2 disabled:opacity-50"><Trash2 className="w-4 h-4" /> Excluir lançamento</button>
+              <div className="flex gap-3">
+                <button onClick={() => setEditingActivity(null)} disabled={saving} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm">Cancelar</button>
+                <button onClick={() => void saveActivity()} disabled={saving} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold flex items-center gap-2"><Check className="w-4 h-4" />{saving ? 'Salvando...' : 'Salvar correção'}</button>
+              </div>
             </div>
           </div>
         </div>
@@ -606,25 +759,63 @@ export default function HistoryLogs({
 
       {editingStoppage && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 p-4 flex items-center justify-center">
-          <div className="w-full max-w-lg rounded-2xl bg-white border border-slate-200 shadow-2xl">
+          <div className="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white border border-slate-200 shadow-2xl">
             <div className="p-5 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-[10px] uppercase tracking-widest text-rose-600 font-bold">Correção pontual</div>
-                <h3 className="text-lg font-bold text-slate-900">Parada {editingStoppage.stoppageCode} • {editingStoppage.operator}</h3>
+                <div className="text-[10px] uppercase tracking-widest text-rose-600 font-bold">Correção administrativa</div>
+                <h3 className="text-lg font-bold text-slate-900">Editar lançamento completo da parada</h3>
+                <p className="text-xs text-slate-500 mt-1">Data, colaborador, código, horários e observações.</p>
               </div>
               <button onClick={() => setEditingStoppage(null)} className="p-2 rounded-lg border border-slate-200"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5 space-y-4">
-              <label className="text-xs font-semibold text-slate-500">Observação<textarea rows={3} value={editingStoppage.notes || ''} onChange={e => setEditingStoppage(v => v ? { ...v, notes: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
-              <label className="text-xs font-semibold text-slate-500">Retomada<textarea rows={3} value={editingStoppage.resolutionNotes || ''} onChange={e => setEditingStoppage(v => v ? { ...v, resolutionNotes: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label>
+
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="text-xs font-semibold text-slate-500">Data
+                <input type="date" value={displayDateToInput(editingStoppage.date)} onChange={e => setEditingStoppage(v => v ? { ...v, date: inputDateToDisplay(e.target.value) } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Colaborador
+                <select value={editingStoppage.operator} onChange={e => setEditingStoppage(v => v ? { ...v, operator: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                  {Array.from(new Set([editingStoppage.operator, ...collaborators].filter(Boolean))).map(operator => (
+                    <option key={operator} value={operator}>{operator}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Parada
+                <select value={editingStoppage.stoppageCode} onChange={e => setEditingStoppage(v => v ? { ...v, stoppageCode: Number(e.target.value) } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                  {STOPPAGE_OPTIONS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                </select>
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Horário inicial
+                <input type="time" value={editingStoppage.startTime} onChange={e => setEditingStoppage(v => v ? { ...v, startTime: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500">Horário final
+                <input type="time" value={editingStoppage.endTime || ''} onChange={e => setEditingStoppage(v => v ? { ...v, endTime: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500 md:col-span-2">Observação
+                <textarea rows={3} value={editingStoppage.notes || ''} onChange={e => setEditingStoppage(v => v ? { ...v, notes: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </label>
+
+              <label className="text-xs font-semibold text-slate-500 md:col-span-2">Retomada / resolução
+                <textarea rows={3} value={editingStoppage.resolutionNotes || ''} onChange={e => setEditingStoppage(v => v ? { ...v, resolutionNotes: e.target.value } : v)} className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </label>
             </div>
-            <div className="p-5 border-t border-slate-200 flex justify-end gap-3">
-              <button onClick={() => setEditingStoppage(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm">Cancelar</button>
-              <button onClick={() => void saveStoppage()} disabled={saving} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold flex items-center gap-2"><Check className="w-4 h-4" />{saving ? 'Salvando...' : 'Salvar correção'}</button>
+
+            <div className="p-5 border-t border-slate-200 flex justify-between gap-3">
+              <button onClick={() => void deleteStoppage(editingStoppage)} disabled={saving} className="px-4 py-2 rounded-lg border border-rose-200 text-rose-600 text-sm flex items-center gap-2 disabled:opacity-50"><Trash2 className="w-4 h-4" /> Excluir lançamento</button>
+              <div className="flex gap-3">
+                <button onClick={() => setEditingStoppage(null)} disabled={saving} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm">Cancelar</button>
+                <button onClick={() => void saveStoppage()} disabled={saving} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold flex items-center gap-2"><Check className="w-4 h-4" />{saving ? 'Salvando...' : 'Salvar correção'}</button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

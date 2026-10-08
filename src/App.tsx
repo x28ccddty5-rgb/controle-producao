@@ -39,7 +39,7 @@ import ActivityManagement from './components/ActivityManagement';
 import StoppageManagement from './components/StoppageManagement';
 import HistoryLogs from './components/HistoryLogs';
 import AdminPanel from './components/AdminPanel';
-import AdminUsersManagement, { ManagedUser, NewUserPayload } from './components/AdminUsersManagement';
+import AdminUsersManagement, { ManagedUser, ManagedUserRole, NewUserPayload } from './components/AdminUsersManagement';
 import ProductionBatch from './components/ProductionBatch';
 import MobileProduction from './components/MobileProduction';
 import ShiftPlanning from './components/ShiftPlanning';
@@ -85,15 +85,13 @@ function detectMobileMode(): boolean {
     window.location.pathname.startsWith('/mobile/') ||
     params.get('mobile') === '1';
 
-  const standalone =
-    window.matchMedia('(display-mode: standalone)').matches ||
-    window.matchMedia('(display-mode: fullscreen)').matches ||
-    Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
-
+  // Desktop-installed PWA must remain Desktop. Standalone/fullscreen alone
+  // is therefore not a Mobile signal; phones/tablets are detected by the UA
+  // or by the explicit /mobile route/query.
   const mobileUserAgent =
     /Android|iPhone|iPad|iPod|Windows Phone|Mobile/i.test(window.navigator.userAgent);
 
-  return explicitMobile || standalone || mobileUserAgent;
+  return explicitMobile || mobileUserAgent;
 }
 
 function parseTimeToMinutes(timeStr: string): number {
@@ -253,16 +251,16 @@ const loadStoppageTypes = async () => {
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('username,name,role')
+        .select('username,name,role,deleted_at')
         .eq('id', userId)
         .single();
 
-      if (profileError || !profile) {
-        console.error('Erro ao carregar perfil autenticado:', profileError);
+      if (profileError || !profile || profile.deleted_at) {
+        console.error('Perfil autenticado inexistente ou excluído:', profileError);
         await supabase.auth.signOut();
         setSessionUser(null);
         setSessionUserName('Visitante');
-        setLoginError('A conta foi autenticada, mas o perfil de acesso não foi encontrado.');
+        setLoginError('Esta conta não possui mais acesso ao sistema.');
         setIsInitializing(false);
         return;
       }
@@ -556,7 +554,7 @@ const handleDeleteStoppageType = async (
     }
 
     if (!window.confirm(
-      `Excluir o acesso do usuário "${user.name}" (${user.username})? O acesso ao aplicativo será encerrado e os registros históricos serão preservados.`
+      `Excluir definitivamente o usuário "${user.name}" (${user.username})? A conta de acesso será removida, o login e o e-mail ficarão disponíveis para uma nova conta, e todo o histórico operacional será preservado.`
     )) {
       return false;
     }
@@ -588,6 +586,100 @@ const handleDeleteStoppageType = async (
     }
 
     await loadManagedUsers();
+    return true;
+  };
+
+  const handleChangeManagedUserPassword = async (
+    user: ManagedUser,
+    password: string
+  ): Promise<boolean> => {
+    if (!supabase || sessionUser !== 'administrador') {
+      alert('Apenas o Administrador pode alterar senhas de usuários.');
+      return false;
+    }
+
+    const normalizedPassword = password.trim();
+
+    if (normalizedPassword.length < 6) {
+      alert('A senha deve possuir pelo menos 6 caracteres.');
+      return false;
+    }
+
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: {
+        operation: 'update-password',
+        id: user.id,
+        password: normalizedPassword
+      }
+    });
+
+    if (error || !data?.success) {
+      console.error('Erro ao alterar senha:', error);
+
+      let serverMessage = data?.error as string | undefined;
+      const context = (error as { context?: Response } | null)?.context;
+
+      if (!serverMessage && context && typeof context.json === 'function') {
+        try {
+          const payload = await context.json() as { error?: string };
+          serverMessage = payload?.error;
+        } catch {
+          // Mantém a mensagem genérica quando a resposta não puder ser lida.
+        }
+      }
+
+      alert(serverMessage || error?.message || 'Não foi possível alterar a senha.');
+      return false;
+    }
+
+    alert(`Senha do usuário "${user.name}" alterada com sucesso.`);
+    return true;
+  };
+
+  const handleChangeManagedUserRole = async (
+    user: ManagedUser,
+    role: ManagedUserRole
+  ): Promise<boolean> => {
+    if (!supabase || sessionUser !== 'administrador') {
+      alert('Apenas o Administrador pode alterar o perfil dos usuários.');
+      return false;
+    }
+
+    const currentAuthUser = await supabase.auth.getUser();
+    if (user.username === 'adm' || user.id === currentAuthUser.data.user?.id) {
+      alert('A conta administrativa principal não pode ter o perfil alterado.');
+      return false;
+    }
+
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: {
+        operation: 'update-role',
+        id: user.id,
+        role
+      }
+    });
+
+    if (error || !data?.success) {
+      console.error('Erro ao alterar perfil:', error);
+
+      let serverMessage = data?.error as string | undefined;
+      const context = (error as { context?: Response } | null)?.context;
+
+      if (!serverMessage && context && typeof context.json === 'function') {
+        try {
+          const payload = await context.json() as { error?: string };
+          serverMessage = payload?.error;
+        } catch {
+          // Mantém a mensagem genérica quando a resposta não puder ser lida.
+        }
+      }
+
+      alert(serverMessage || error?.message || 'Não foi possível alterar o perfil.');
+      return false;
+    }
+
+    await loadManagedUsers();
+    alert(`Perfil de "${user.name}" alterado para ${role}.`);
     return true;
   };
 
@@ -1730,6 +1822,8 @@ const handleDeleteStoppageType = async (
               loading={managedUsersLoading}
               onCreateUser={handleCreateManagedUser}
               onDeleteUser={handleDeleteManagedUser}
+              onChangePassword={handleChangeManagedUserPassword}
+              onChangeRole={handleChangeManagedUserRole}
             />
           ) : null
         }
@@ -2135,6 +2229,8 @@ const handleDeleteStoppageType = async (
                   loading={managedUsersLoading}
                   onCreateUser={handleCreateManagedUser}
                   onDeleteUser={handleDeleteManagedUser}
+              onChangePassword={handleChangeManagedUserPassword}
+                onChangeRole={handleChangeManagedUserRole}
                 />
               )}
             </div>

@@ -658,13 +658,10 @@ export default function ProductionBatch({
       }
 
       if (hasLongDuration) {
-        const confirmed = window.confirm(
-          'Foi identificado um lançamento com duração superior a 12 horas. Deseja continuar mesmo assim?'
+        alert(
+          'Lançamento bloqueado: a duração de uma linha não pode ser superior a 12 horas. Verifique os horários de início e fim. Viradas de turno após 00:00 continuam permitidas quando a duração real permanece dentro de 12 horas.'
         );
-
-        if (!confirmed) {
-          return;
-        }
+        return;
       }
 
       onAddBatch(

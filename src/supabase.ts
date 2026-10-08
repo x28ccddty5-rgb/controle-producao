@@ -815,3 +815,47 @@ export async function dbAdminCorrectStoppageHistory(
     return null;
   }
 }
+
+export async function dbAdminDeleteActivityHistory(
+  activityId: string
+): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { data, error } = await supabase.rpc('mobile_admin_delete_history_activity', {
+      p_activity_id: activityId
+    });
+
+    if (error) {
+      console.error('Error deleting activity history:', error);
+      return false;
+    }
+
+    return data === true;
+  } catch (err) {
+    console.error('Supabase activity history deletion failed:', err);
+    return false;
+  }
+}
+
+export async function dbAdminDeleteStoppageHistory(
+  stoppageId: string
+): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { data, error } = await supabase.rpc('mobile_admin_delete_history_stoppage', {
+      p_stoppage_id: stoppageId
+    });
+
+    if (error) {
+      console.error('Error deleting stoppage history:', error);
+      return false;
+    }
+
+    return data === true;
+  } catch (err) {
+    console.error('Supabase stoppage history deletion failed:', err);
+    return false;
+  }
+}

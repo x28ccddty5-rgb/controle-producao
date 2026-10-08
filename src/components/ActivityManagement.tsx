@@ -165,7 +165,7 @@ export default function ActivityManagement({
       }
       const totalMinutes = endMins - startMins;
       if (totalMinutes > 720) { // More than 12 hours
-        setFormError('Atenção: O horário final não pode ser anterior ao horário de início (limite padrão de 12h, inclusive em viradas de turno). Verifique se digitou corretamente.');
+        setFormError('Lançamento bloqueado: a duração não pode ser superior a 12 horas. Verifique os horários. Viradas de turno após 00:00 continuam permitidas quando a duração real permanece dentro de 12 horas.');
         return;
       }
     }

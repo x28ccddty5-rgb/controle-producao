@@ -1,5 +1,5 @@
 import React, { FormEvent, useState } from 'react';
-import { ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
+import { KeyRound, ShieldCheck, Trash2, UserPlus, Users, UserCog, X } from 'lucide-react';
 
 export type ManagedUserRole =
   | 'administrador'
@@ -30,6 +30,8 @@ interface AdminUsersManagementProps {
   loading: boolean;
   onCreateUser: (payload: NewUserPayload) => Promise<boolean>;
   onDeleteUser: (user: ManagedUser) => Promise<boolean>;
+  onChangePassword: (user: ManagedUser, password: string) => Promise<boolean>;
+  onChangeRole: (user: ManagedUser, role: ManagedUserRole) => Promise<boolean>;
 }
 
 const ROLE_LABELS: Record<ManagedUserRole, string> = {
@@ -80,6 +82,8 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({
   loading,
   onCreateUser,
   onDeleteUser,
+  onChangePassword,
+  onChangeRole,
 }) => {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -87,6 +91,15 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<ManagedUserRole>('apoio');
   const [saving, setSaving] = useState(false);
+
+  const [passwordUser, setPasswordUser] = useState<ManagedUser | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const [roleUser, setRoleUser] = useState<ManagedUser | null>(null);
+  const [selectedRole, setSelectedRole] = useState<ManagedUserRole>('apoio');
+  const [changingRole, setChangingRole] = useState(false);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -151,6 +164,78 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({
       alert(`Usuário "${normalizedName}" criado com sucesso.`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openPasswordEditor = (user: ManagedUser) => {
+    setPasswordUser(user);
+    setNewPassword('');
+    setConfirmPassword('');
+  };
+
+  const closePasswordEditor = () => {
+    if (changingPassword) return;
+    setPasswordUser(null);
+    setNewPassword('');
+    setConfirmPassword('');
+  };
+
+  const handlePasswordSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!passwordUser) return;
+
+    if (newPassword.length < 6) {
+      alert('A nova senha deve possuir pelo menos 6 caracteres.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      alert('A confirmação da senha não confere.');
+      return;
+    }
+
+    setChangingPassword(true);
+
+    try {
+      const success = await onChangePassword(passwordUser, newPassword);
+
+      if (!success) return;
+
+      closePasswordEditor();
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const openRoleEditor = (user: ManagedUser) => {
+    setRoleUser(user);
+    setSelectedRole(user.role);
+  };
+
+  const closeRoleEditor = () => {
+    if (changingRole) return;
+    setRoleUser(null);
+  };
+
+  const handleRoleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!roleUser) return;
+
+    if (roleUser.username === 'adm') {
+      alert('A conta administrativa principal deve permanecer como Administrador.');
+      return;
+    }
+
+    setChangingRole(true);
+
+    try {
+      const success = await onChangeRole(roleUser, selectedRole);
+      if (!success) return;
+      closeRoleEditor();
+    } finally {
+      setChangingRole(false);
     }
   };
 
@@ -309,18 +394,58 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({
                         </td>
                         <td className="px-4 py-3 text-right">
                           {isProtected || isCurrent ? (
-                            <span className="text-[10px] text-slate-400 italic">
-                              Sistema protegido
-                            </span>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openRoleEditor(user)}
+                                disabled={isProtected || isCurrent}
+                                className="inline-flex items-center gap-1.5 border border-slate-200 bg-white hover:bg-violet-50 hover:border-violet-200 hover:text-violet-600 text-slate-600 rounded-md px-2.5 py-1.5 text-[10px] font-bold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                title={isProtected || isCurrent ? 'Perfil protegido' : 'Alterar perfil'}
+                              >
+                                <UserCog className="w-3.5 h-3.5" />
+                                Perfil
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openPasswordEditor(user)}
+                                className="inline-flex items-center gap-1.5 border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 text-slate-600 rounded-md px-2.5 py-1.5 text-[10px] font-bold transition"
+                              >
+                                <KeyRound className="w-3.5 h-3.5" />
+                                Senha
+                              </button>
+                              <span className="text-[10px] text-slate-400 italic">
+                                Sistema protegido
+                              </span>
+                            </div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => void onDeleteUser(user)}
-                              className="inline-flex items-center gap-1.5 border border-slate-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-600 rounded-md px-2.5 py-1.5 text-[10px] font-bold transition"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              Excluir acesso
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openRoleEditor(user)}
+                                disabled={isProtected || isCurrent}
+                                className="inline-flex items-center gap-1.5 border border-slate-200 bg-white hover:bg-violet-50 hover:border-violet-200 hover:text-violet-600 text-slate-600 rounded-md px-2.5 py-1.5 text-[10px] font-bold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                title={isProtected || isCurrent ? 'Perfil protegido' : 'Alterar perfil'}
+                              >
+                                <UserCog className="w-3.5 h-3.5" />
+                                Perfil
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openPasswordEditor(user)}
+                                className="inline-flex items-center gap-1.5 border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 text-slate-600 rounded-md px-2.5 py-1.5 text-[10px] font-bold transition"
+                              >
+                                <KeyRound className="w-3.5 h-3.5" />
+                                Senha
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void onDeleteUser(user)}
+                                className="inline-flex items-center gap-1.5 border border-slate-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-600 rounded-md px-2.5 py-1.5 text-[10px] font-bold transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Excluir acesso
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -340,6 +465,160 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({
           </div>
         </div>
       </div>
+
+      {roleUser && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/50 flex items-center justify-center p-4">
+          <form
+            onSubmit={handleRoleSubmit}
+            className="w-full max-w-md bg-white rounded-xl shadow-2xl border border-slate-200 p-6"
+          >
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <UserCog className="w-5 h-5 text-violet-600" />
+                  Alterar perfil
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Usuário: <strong className="text-slate-600">{roleUser.username}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeRoleEditor}
+                disabled={changingRole}
+                className="p-1.5 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Perfil / permissões
+              </label>
+              <select
+                value={selectedRole}
+                onChange={event => setSelectedRole(normalizeRole(event.target.value))}
+                disabled={changingRole}
+                className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-violet-500"
+              >
+                {ROLE_OPTIONS.map(option => (
+                  <option key={option} value={option}>
+                    {ROLE_LABELS[option]}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-400 mt-2">
+                A alteração é aplicada ao perfil de acesso do usuário.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                type="button"
+                onClick={closeRoleEditor}
+                disabled={changingRole}
+                className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg px-4 py-2.5 text-xs font-bold disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={changingRole}
+                className="bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white rounded-lg px-4 py-2.5 text-xs font-bold flex items-center gap-2"
+              >
+                <UserCog className="w-4 h-4" />
+                {changingRole ? 'Salvando...' : 'Salvar perfil'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {passwordUser && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/50 flex items-center justify-center p-4">
+          <form
+            onSubmit={handlePasswordSubmit}
+            className="w-full max-w-md bg-white rounded-xl shadow-2xl border border-slate-200 p-6"
+          >
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-blue-600" />
+                  Alterar senha
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Usuário: <strong className="text-slate-600">{passwordUser.username}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closePasswordEditor}
+                disabled={changingPassword}
+                className="p-1.5 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                  Nova senha
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={event => setNewPassword(event.target.value)}
+                  autoComplete="new-password"
+                  placeholder="Mínimo de 6 caracteres"
+                  className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                  Confirmar nova senha
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={event => setConfirmPassword(event.target.value)}
+                  autoComplete="new-password"
+                  placeholder="Repita a nova senha"
+                  className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <p className="text-[10px] text-slate-400">
+                A senha é alterada diretamente no Supabase Auth e não é armazenada pelo sistema.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                type="button"
+                onClick={closePasswordEditor}
+                disabled={changingPassword}
+                className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg px-4 py-2.5 text-xs font-bold disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={changingPassword}
+                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-lg px-4 py-2.5 text-xs font-bold flex items-center gap-2"
+              >
+                <KeyRound className="w-4 h-4" />
+                {changingPassword ? 'Alterando...' : 'Alterar senha'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </section>
   );
 };
