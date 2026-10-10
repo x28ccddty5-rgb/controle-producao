@@ -185,7 +185,14 @@ export default function MobileAdminOperation() {
     setWorking(true);
     setError('');
     try {
-      await mobileAdminConfirmActivity(session.id, version);
+      let expectedVersion = version;
+      if (dirtyRef.current) {
+        const saved = await mobileAdminUpdateDraft(session.id, draft, expectedVersion);
+        expectedVersion = saved.version;
+        setVersion(saved.version);
+        dirtyRef.current = false;
+      }
+      await mobileAdminConfirmActivity(session.id, expectedVersion);
       setSession(null);
       setDraft(EMPTY_DRAFT);
       setVersion(1);

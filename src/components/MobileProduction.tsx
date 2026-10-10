@@ -450,13 +450,35 @@ export default function MobileProduction({
     mutate(() => mobileBeginFinalization(session.id), 'Formulário final aberto.');
   };
 
-  const confirmActivity = () => {
+  const confirmActivity = async () => {
     if (!session) return;
     if (!canConfirm) {
       setError('Preencha os campos obrigatórios antes de confirmar.');
       return;
     }
-    mutate(() => mobileConfirmActivity(session.id, draftVersion), 'Atividade confirmada.');
+
+    // Flush the most recent form values before confirmation. Otherwise a fast
+    // tap can race the 500ms autosave and submit an outdated draft version.
+    setWorking(true);
+    setError('');
+    try {
+      let expectedVersion = draftVersionRef.current;
+      if (draftDirtyRef.current) {
+        const saved = await mobileUpdateDraft(session.id, draft, expectedVersion);
+        expectedVersion = saved.version;
+        draftVersionRef.current = saved.version;
+        setDraftVersion(saved.version);
+        draftDirtyRef.current = false;
+      }
+      await mobileConfirmActivity(session.id, expectedVersion);
+      setNotice('Atividade confirmada.');
+      await refresh();
+    } catch (err) {
+      console.error('Erro ao confirmar atividade Mobile:', err);
+      setError(err instanceof Error ? err.message : 'Não foi possível confirmar a atividade.');
+    } finally {
+      setWorking(false);
+    }
   };
 
   const startStop = () => {

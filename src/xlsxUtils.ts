@@ -239,48 +239,56 @@ async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
 }
 
 async function unzipEntries(buffer: ArrayBuffer): Promise<ZipEntry[]> {
+  // Read entries from the ZIP central directory. Excel/LibreOffice files often
+  // use data descriptors, so local-header sizes may be zero and cannot be used
+  // to find the next entry reliably.
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
   const entries: ZipEntry[] = [];
-  let offset = 0;
+  const eocdSignature = 0x06054b50;
+  let eocdOffset = -1;
+  const minOffset = Math.max(0, bytes.length - 22 - 0xffff);
 
-  while (offset + 4 <= bytes.length) {
-    const signature = readU32(view, offset);
-    if (signature === 0x04034b50) {
-      if (offset + 30 > bytes.length) throw new Error('Arquivo Excel inválido.');
-
-      const method = readU16(view, offset + 8);
-      const compressedSize = readU32(view, offset + 18);
-      const nameLength = readU16(view, offset + 26);
-      const extraLength = readU16(view, offset + 28);
-      const nameStart = offset + 30;
-      const dataStart = nameStart + nameLength + extraLength;
-      const dataEnd = dataStart + compressedSize;
-
-      if (dataEnd > bytes.length) throw new Error('Arquivo Excel truncado.');
-
-      const name = decoder.decode(bytes.slice(nameStart, dataStart)).replace(/^\uFEFF/, '');
-      const compressed = bytes.slice(dataStart, dataEnd);
-
-      let data: Uint8Array;
-      if (method === 0) {
-        data = compressed;
-      } else if (method === 8) {
-        data = await inflateRaw(compressed);
-      } else {
-        throw new Error(`Formato de compactação do Excel não suportado: ${method}.`);
-      }
-
-      entries.push({ name, method, data });
-      offset = dataEnd;
-      continue;
-    }
-
-    if (signature === 0x02014b50 || signature === 0x06054b50) {
+  for (let offset = bytes.length - 22; offset >= minOffset; offset -= 1) {
+    if (offset >= 0 && readU32(view, offset) === eocdSignature) {
+      eocdOffset = offset;
       break;
     }
+  }
+  if (eocdOffset < 0) throw new Error('Arquivo Excel inválido: diretório ZIP não encontrado.');
 
-    offset += 1;
+  const entryCount = readU16(view, eocdOffset + 10);
+  let offset = readU32(view, eocdOffset + 16);
+  for (let index = 0; index < entryCount; index += 1) {
+    if (offset + 46 > bytes.length || readU32(view, offset) !== 0x02014b50) {
+      throw new Error('Arquivo Excel inválido: diretório ZIP inconsistente.');
+    }
+    const method = readU16(view, offset + 10);
+    const compressedSize = readU32(view, offset + 20);
+    const nameLength = readU16(view, offset + 28);
+    const extraLength = readU16(view, offset + 30);
+    const commentLength = readU16(view, offset + 32);
+    const localOffset = readU32(view, offset + 42);
+    const nameStart = offset + 46;
+    const name = decoder.decode(bytes.slice(nameStart, nameStart + nameLength)).replace(/^\uFEFF/, '');
+
+    if (localOffset + 30 > bytes.length || readU32(view, localOffset) !== 0x04034b50) {
+      throw new Error('Arquivo Excel inválido: cabeçalho de arquivo ausente.');
+    }
+    const localNameLength = readU16(view, localOffset + 26);
+    const localExtraLength = readU16(view, localOffset + 28);
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+    const dataEnd = dataStart + compressedSize;
+    if (dataEnd > bytes.length) throw new Error('Arquivo Excel truncado.');
+    const compressed = bytes.slice(dataStart, dataEnd);
+
+    let data: Uint8Array;
+    if (method === 0) data = compressed;
+    else if (method === 8) data = await inflateRaw(compressed);
+    else throw new Error(`Formato de compactação do Excel não suportado: ${method}.`);
+
+    entries.push({ name, method, data });
+    offset = nameStart + nameLength + extraLength + commentLength;
   }
 
   if (!entries.length) throw new Error('Nenhuma planilha Excel foi encontrada.');

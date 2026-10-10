@@ -128,7 +128,7 @@ export default function Dashboard({
         setActivityTargets(data);
         setTargetDrafts(
           Object.fromEntries(
-            data.map(item => [item.code, item.targetPerHour === null ? '' : String(item.targetPerHour)])
+            data.map(item => [item.code, item.targetMonthlyPieces === null ? '' : String(item.targetMonthlyPieces)])
           )
         );
       }
@@ -174,8 +174,8 @@ export default function Dashboard({
     const raw = (targetDrafts[code] ?? '').trim().replace(',', '.');
     const value = raw === '' ? null : Number(raw);
 
-    if (value !== null && (!Number.isFinite(value) || value < 0)) {
-      setTargetNotice('Informe uma meta válida, igual ou maior que zero.');
+    if (value !== null && (!Number.isFinite(value) || value < 0 || !Number.isInteger(value))) {
+      setTargetNotice('Informe uma meta mensal inteira, igual ou maior que zero.');
       return;
     }
 
@@ -184,7 +184,9 @@ export default function Dashboard({
     const success = await dbUpdateActivityTarget(code, value);
     if (success) {
       setActivityTargets(current => current.map(item =>
-        item.code === code ? { ...item, targetPerHour: value } : item
+        item.code === code
+          ? { ...item, targetMonthlyPieces: value, targetPerHour: value === null ? null : Math.floor(value / 720) }
+          : item
       ));
       setTargetNotice('Metas atualizadas com sucesso.');
     } else {
@@ -701,7 +703,7 @@ export default function Dashboard({
             <div>
               <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Configuração</p>
               <h2 className="text-sm font-extrabold text-slate-800">Metas operacionais</h2>
-              <p className="text-[10px] text-slate-400 mt-1">Somente as atividades 1, 2 e 3 possuem meta neste painel. Alterações são salvas no banco e refletem no Dashboard.</p>
+              <p className="text-[10px] text-slate-400 mt-1">Informe a meta mensal em peças. O sistema calcula pç/h dividindo por 720 horas fixas (30 dias × 24 horas).</p>
             </div>
             {targetsLoading && <span className="text-[10px] text-slate-400">Carregando...</span>}
           </div>
@@ -710,17 +712,17 @@ export default function Dashboard({
               <div key={target.code} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-bold text-slate-700">{target.code} • {target.label}</div>
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400">pç/h</span>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400">peças/mês</span>
                 </div>
                 <div className="mt-2 flex gap-2">
                   <input
                     type="number"
                     min="0"
-                    step="0.1"
+                    step="1"
                     value={targetDrafts[target.code] ?? ''}
                     onChange={event => setTargetDrafts(current => ({ ...current, [target.code]: event.target.value }))}
                     className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-mono outline-none focus:border-blue-500"
-                    placeholder="Sem meta"
+                    placeholder="Meta mensal em peças"
                   />
                   <button
                     type="button"
@@ -731,6 +733,7 @@ export default function Dashboard({
                     {savingTargetCode === target.code ? '...' : 'SALVAR'}
                   </button>
                 </div>
+                <p className="mt-2 text-[10px] text-slate-500">Meta calculada: {Math.floor((Number(targetDrafts[target.code]) || 0) / 720).toLocaleString('pt-BR')} pç/h</p>
               </div>
             ))}
           </div>

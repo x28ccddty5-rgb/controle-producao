@@ -373,6 +373,7 @@ export async function dbFetchActiveStoppages(): Promise<Stoppage[] | null> {
 export interface ActivityTarget {
   code: number;
   label: string;
+  targetMonthlyPieces: number | null;
   targetPerHour: number | null;
 }
 
@@ -389,9 +390,12 @@ export async function dbFetchActivityTargets(): Promise<ActivityTarget[] | null>
     return (Array.isArray(data) ? data : []).map((item: any) => ({
       code: Number(item.code),
       label: String(item.label ?? ''),
-      targetPerHour: item.target_per_hour === null || item.target_per_hour === undefined
+      targetMonthlyPieces: item.target_monthly_pieces === null || item.target_monthly_pieces === undefined
         ? null
-        : Number(item.target_per_hour)
+        : Number(item.target_monthly_pieces),
+      targetPerHour: item.target_monthly_pieces === null || item.target_monthly_pieces === undefined
+        ? null
+        : Math.floor(Number(item.target_monthly_pieces) / 720)
     }));
   } catch (err) {
     console.error('Supabase activity targets query failed:', err);
@@ -399,13 +403,13 @@ export async function dbFetchActivityTargets(): Promise<ActivityTarget[] | null>
   }
 }
 
-export async function dbUpdateActivityTarget(code: number, targetPerHour: number | null): Promise<boolean> {
+export async function dbUpdateActivityTarget(code: number, targetMonthlyPieces: number | null): Promise<boolean> {
   if (!supabase) return false;
 
   try {
     const { error } = await supabase.rpc('dashboard_update_activity_target', {
       p_activity_code: code,
-      p_target_per_hour: targetPerHour
+      p_target_monthly_pieces: targetMonthlyPieces
     });
 
     if (error) {

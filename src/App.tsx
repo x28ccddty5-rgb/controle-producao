@@ -230,56 +230,26 @@ const loadStoppageTypes = async () => {
       setSessionUser(null);
       setSessionUserName('Visitante');
       setAuthLoading(false);
+      setIsInitializing(false);
       setLoginError('Supabase não está configurado para autenticação.');
       return;
     }
 
     setAuthLoading(true);
-
     try {
-      const { data: sessionData, error: sessionError } =
-        await supabase.auth.getSession();
-
-      if (sessionError || !sessionData.session) {
-        setSessionUser(null);
-        setSessionUserName('Visitante');
-        setIsInitializing(false);
-        return;
-      }
-
-      const userId = sessionData.session.user.id;
-
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('username,name,role,deleted_at')
-        .eq('id', userId)
-        .single();
-
-      if (profileError || !profile || profile.deleted_at) {
-        console.error('Perfil autenticado inexistente ou excluído:', profileError);
-        await supabase.auth.signOut();
-        setSessionUser(null);
-        setSessionUserName('Visitante');
-        setLoginError('Esta conta não possui mais acesso ao sistema.');
-        setIsInitializing(false);
-        return;
-      }
-
-      const role = getAppRole(profile.role);
-
-      setSessionUser(role);
-      setSessionUserName(profile.name);
-      setGlobalCreator(profile.name);
-      localStorage.setItem('porto_global_creator', profile.name);
-
-      // A produção deve iniciar diretamente no lançamento.
-      setActiveTab(role === 'producao' || role === 'apoio' ? 'ACTIVITIES' : 'DASHBOARD');
-    } catch (error) {
-      console.error('Erro ao restaurar sessão Supabase:', error);
-      await supabase.auth.signOut();
+      // Política operacional: cada carregamento exige novo login. Limpar a
+      // sessão local antes de liberar a interface também cobre refresh e PWA
+      // reaberto após fechamento, sem depender do evento beforeunload.
+      await supabase.auth.signOut({ scope: 'local' });
       setSessionUser(null);
       setSessionUserName('Visitante');
-      setLoginError('Não foi possível restaurar a sessão.');
+      setLoginPassword('');
+      setLoginUsername('');
+      setIsInitializing(false);
+    } catch (error) {
+      console.error('Não foi possível limpar a sessão anterior:', error);
+      setSessionUser(null);
+      setSessionUserName('Visitante');
       setIsInitializing(false);
     } finally {
       setAuthLoading(false);
