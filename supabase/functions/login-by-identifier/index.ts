@@ -90,6 +90,7 @@ Deno.serve(async (req) => {
         .from("profiles")
         .select("id,username,name,role")
         .ilike("username", normalizedIdentifier)
+        .is("deleted_at", null)
         .limit(2);
 
     if (usernameError) {
@@ -107,6 +108,7 @@ Deno.serve(async (req) => {
         .from("profiles")
         .select("id,username,name,role")
         .ilike("name", normalizedIdentifier)
+        .is("deleted_at", null)
         .limit(2);
 
       if (nameError) {
