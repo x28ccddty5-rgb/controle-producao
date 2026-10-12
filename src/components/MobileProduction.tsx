@@ -99,6 +99,20 @@ function contextLabel(context: MobileContext) {
   }
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === 'object') {
+    const value = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const message = typeof value.message === 'string' ? value.message.trim() : '';
+    const details = typeof value.details === 'string' ? value.details.trim() : '';
+    const hint = typeof value.hint === 'string' ? value.hint.trim() : '';
+    const code = typeof value.code === 'string' ? value.code.trim() : '';
+    const parts = [message, details, hint ? `Orientação: ${hint}` : '', code ? `Código: ${code}` : ''].filter(Boolean);
+    if (parts.length) return parts.join(' ');
+  }
+  return fallback;
+}
+
 function contextTone(context: MobileContext) {
   switch (context) {
     case 'ATIVIDADE': return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
@@ -140,6 +154,10 @@ export default function MobileProduction({
   const [draftIncrement, setDraftIncrement] = useState({ pieces: '', items: '', pallet: '', forklift: '' });
   const draftLoadedSessionId = useRef<string | null>(null);
   const draftVersionRef = useRef(1);
+  const draftRef = useRef<MobileDraft['payload']>(EMPTY_DRAFT);
+  const draftRevisionRef = useRef(0);
+  const draftSavedRevisionRef = useRef(0);
+  const draftSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const draftDirtyRef = useRef(false);
   const serverClockRef = useRef<{ serverNowMs: number; monotonicMs: number } | null>(null);
 
@@ -241,14 +259,21 @@ export default function MobileProduction({
           draftLoadedSessionId.current !== openSession.id ||
           !draftDirtyRef.current
         )) {
-          setDraft({ ...EMPTY_DRAFT, ...(savedDraft.payload || {}) });
+          const loadedPayload = { ...EMPTY_DRAFT, ...(savedDraft.payload || {}) };
+          setDraft(loadedPayload);
+          draftRef.current = loadedPayload;
           setDraftVersion(savedDraft.version);
           draftVersionRef.current = savedDraft.version;
+          draftRevisionRef.current = 0;
+          draftSavedRevisionRef.current = 0;
           draftDirtyRef.current = false;
         } else if (!savedDraft && draftLoadedSessionId.current !== openSession.id) {
           setDraft(EMPTY_DRAFT);
+          draftRef.current = EMPTY_DRAFT;
           setDraftVersion(1);
           draftVersionRef.current = 1;
+          draftRevisionRef.current = 0;
+          draftSavedRevisionRef.current = 0;
           draftDirtyRef.current = false;
         }
         draftLoadedSessionId.current = openSession.id;
@@ -309,7 +334,7 @@ export default function MobileProduction({
       await refresh();
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : 'Operação não concluída.');
+      setError(errorMessage(err, 'Operação não concluída.'));
     } finally {
       setWorking(false);
     }
@@ -367,9 +392,33 @@ export default function MobileProduction({
     key: K,
     value: MobileDraft['payload'][K]
   ) => {
+    const next = { ...draftRef.current, [key]: value };
+    draftRef.current = next;
+    draftRevisionRef.current += 1;
     draftDirtyRef.current = true;
-    setDraft((previous) => ({ ...previous, [key]: value }));
+    setDraft(next);
   };
+
+  // Serialize all draft writes. Autosave and the confirmation button must never
+  // submit the same expected version concurrently (which can cause a version conflict).
+  const saveDraftSnapshot = useCallback((
+    sessionId: string,
+    payload: MobileDraft['payload'],
+    revision: number
+  ) => {
+    const save = draftSaveQueueRef.current.catch(() => undefined).then(async () => {
+      const result = await mobileUpdateDraft(sessionId, payload, draftVersionRef.current);
+      if (!result || !Number.isFinite(result.version)) {
+        throw new Error('O servidor não confirmou a gravação do formulário. Tente novamente.');
+      }
+      draftVersionRef.current = result.version;
+      setDraftVersion(result.version);
+      draftSavedRevisionRef.current = Math.max(draftSavedRevisionRef.current, revision);
+      draftDirtyRef.current = draftSavedRevisionRef.current < draftRevisionRef.current;
+    });
+    draftSaveQueueRef.current = save;
+    return save;
+  }, []);
 
   useEffect(() => {
     if (
@@ -382,22 +431,18 @@ export default function MobileProduction({
     }
 
     const timer = window.setTimeout(async () => {
+      const revision = draftRevisionRef.current;
+      const payload = { ...draftRef.current };
       try {
-        const expectedVersion = draftVersionRef.current;
-        const result = await mobileUpdateDraft(session.id, draft, expectedVersion);
-        if (result?.version) {
-          draftVersionRef.current = result.version;
-          setDraftVersion(result.version);
-          draftDirtyRef.current = false;
-        }
+        await saveDraftSnapshot(session.id, payload, revision);
       } catch (err) {
         console.error('Erro ao salvar rascunho Mobile:', err);
-        setError(err instanceof Error ? err.message : 'Não foi possível salvar o rascunho.');
+        setError(errorMessage(err, 'Não foi possível salvar o rascunho. Tente novamente.'));
       }
     }, 500);
 
     return () => window.clearTimeout(timer);
-  }, [draft, session?.id, session?.status]);
+  }, [draft, session?.id, session?.status, saveDraftSnapshot]);
 
   const canConfirm = useMemo(() => {
     const produced = Number(draft.producedQuantity);
@@ -457,25 +502,25 @@ export default function MobileProduction({
       return;
     }
 
-    // Flush the most recent form values before confirmation. Otherwise a fast
-    // tap can race the 500ms autosave and submit an outdated draft version.
+    // Wait for any autosave already in flight, then persist the newest snapshot
+    // if the user changed fields while that request was running.
     setWorking(true);
     setError('');
+    setNotice('');
     try {
-      let expectedVersion = draftVersionRef.current;
-      if (draftDirtyRef.current) {
-        const saved = await mobileUpdateDraft(session.id, draft, expectedVersion);
-        expectedVersion = saved.version;
-        draftVersionRef.current = saved.version;
-        setDraftVersion(saved.version);
-        draftDirtyRef.current = false;
+      await draftSaveQueueRef.current.catch(() => undefined);
+      if (draftSavedRevisionRef.current < draftRevisionRef.current || draftDirtyRef.current) {
+        const latestRevision = draftRevisionRef.current;
+        const latestPayload = { ...draftRef.current };
+        await saveDraftSnapshot(session.id, latestPayload, latestRevision);
       }
-      await mobileConfirmActivity(session.id, expectedVersion);
+      await draftSaveQueueRef.current;
+      await mobileConfirmActivity(session.id, draftVersionRef.current);
       setNotice('Atividade confirmada.');
       await refresh();
     } catch (err) {
       console.error('Erro ao confirmar atividade Mobile:', err);
-      setError(err instanceof Error ? err.message : 'Não foi possível confirmar a atividade.');
+      setError(errorMessage(err, 'Não foi possível confirmar a atividade. Tente novamente.'));
     } finally {
       setWorking(false);
     }
